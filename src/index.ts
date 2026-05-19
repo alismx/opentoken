@@ -1,30 +1,20 @@
 // OpenToken — Token-saving companion for OpenCode
-// 15-layer compression pipeline:
-// L1:  Command rewrite (#3)
-// L2:  Block minified files (#6)
-// L3:  Size caps on write/edit (#7)
-// L4:  Subagent budget (#5)
-// L5:  Family-based bash filtering
-// L6:  Read/grep/glob compression
-// L7:  Binary detection (#16)
-// L8:  Output suppression (#17)
-// L9:  Strip thinking blocks (#15)
-// L10: Whitespace/null cleanup (#21)
-// L11: Key aliasing (#20)
-// L12: Cross-call dedup (#25)
-// L13: Progressive disclosure (#26)
-// L14: Auto-escalation (#36)
-// L15: Session memory + cache-lock (#38, #43)
+// 24-layer compression pipeline — best-in-class token savings
+//
+// Phase 1 (L1-L15): Pre-call filters, post-call processors, dedup, escalation, memory
+// Phase 2 (L16-L24): AST skeleton, diff/log folding, JSON sampling, reversible compression,
+//                     content routing, think-in-code sandbox, symbol index, LSP enforcement
 
 import type { Plugin } from "@opencode-ai/plugin"
-import { preCallFilter, rewriteCommand, isMinifiedOrGenerated } from "./precall"
+
+// Phase 1 imports
+import { preCallFilter } from "./precall"
 import { postCallProcess, stripThinkingBlocks, detectAndHandleBinary, suppressOversized, aliasJsonKeys, cleanWhitespaceAndNulls } from "./postcall"
 import { deduplicate, resetDedup } from "./dedup"
 import { progressiveDisclosure, cleanupOffloaded } from "./progressive"
 import { applyAutoEscalation, updateContext, getCompressionLevel, resetEscalation } from "./autoescalate"
 import {
   loadSessionSummary,
-  checkCacheLock,
   finalizeSession,
   trackFile,
   trackError,
@@ -32,7 +22,6 @@ import {
   trackGitEvent,
   trackToolCall,
   trackTokensSaved,
-  getSessionTracker,
 } from "./session"
 import { detectFamily } from "./families/detect"
 import { filterGitOutput } from "./families/git"
@@ -49,6 +38,16 @@ import { abbreviate } from "./utils/abbreviate"
 import { estimateTokens } from "./utils/tokens"
 import { recordMetric } from "./utils/metrics"
 import { getCachedRead, setCachedRead } from "./utils/cache"
+
+// Phase 2 imports
+import { extractSkeleton } from "./skeleton"
+import { foldDiffAndLogs } from "./folding"
+import { sampleJson } from "./jsonsample"
+import { applyReversibleCompression, cleanupRewind } from "./rewind"
+import { analyzeContent, getCompressionPipeline } from "./router"
+import { smartAnalysis, executeSandbox } from "./sandbox"
+import { findSymbol, findSymbolFuzzy, getFunctionSource, indexDirectory, loadIndex, getIndexStats } from "./symbolindex"
+import { shouldBlockGrep, shouldBlockGlob, shouldBlockShellGrep, shouldAllowRead, trackLSPUsage, resetLSPState } from "./lspfirst"
 
 interface ToolInput {
   tool: string
@@ -84,7 +83,17 @@ function conservativeFilter(original: string, filtered: string): string {
   return filtered
 }
 
-// ─── BASH FILTER PIPELINE ───
+// ─── CONTENT-AWARE ROUTER ───
+function routeContent(content: string, filePath?: string): {
+  pipeline: string[]
+  analysis: ReturnType<typeof analyzeContent>
+} {
+  const analysis = analyzeContent(content, filePath)
+  const pipeline = getCompressionPipeline(analysis)
+  return { pipeline, analysis }
+}
+
+// ─── BASH FILTER PIPELINE (L1-L15 + L16-L24) ───
 function applyBashFilter(command: string, output: string): string {
   // L0: Secret redaction (always first)
   output = redactSecrets(output)
@@ -108,6 +117,20 @@ function applyBashFilter(command: string, output: string): string {
 
   // L11: Key aliasing
   output = aliasJsonKeys(output)
+
+  // L24: Content-Aware Router — detect type, fire relevant stages
+  const { pipeline, analysis } = routeContent(output)
+
+  // L16: Diff/Log Folding (if applicable)
+  if (pipeline.includes("diff-fold") || pipeline.includes("log-fold")) {
+    output = foldDiffAndLogs(output)
+  }
+
+  // L15: JSON Statistical Sampling (if applicable)
+  if (pipeline.includes("json-sample")) {
+    const sampled = sampleJson(output)
+    if (sampled.sampled) output = sampled.result
+  }
 
   // L5: Family-based filtering
   const family = detectFamily(command)
@@ -133,6 +156,12 @@ function applyBashFilter(command: string, output: string): string {
       filtered = filterGeneric(output)
   }
 
+  // L16: Reversible Compression (if large)
+  const reversible = applyReversibleCompression(filtered)
+  if (reversible.compressed) {
+    filtered = reversible.result
+  }
+
   // L14: Auto-escalation
   filtered = applyAutoEscalation(filtered)
 
@@ -149,7 +178,7 @@ function applyBashFilter(command: string, output: string): string {
   return conservativeFilter(output, filtered)
 }
 
-// ─── READ FILTER PIPELINE ───
+// ─── READ FILTER PIPELINE (L1-L15 + L16-L24) ───
 async function applyReadFilter(filePath: string, content: string): Promise<string> {
   // L0: Secret redaction
   content = redactSecrets(content)
@@ -186,12 +215,35 @@ async function applyReadFilter(filePath: string, content: string): Promise<strin
   // L11: Key aliasing
   content = aliasJsonKeys(content)
 
+  // L24: Content-Aware Router
+  const { pipeline, analysis } = routeContent(content, filePath)
+
+  // L16: AST Skeleton Reads (if code file)
+  if (pipeline.includes("skeleton") && content.split("\n").length > 50) {
+    const skeleton = await extractSkeleton(filePath, content)
+    if (skeleton) {
+      content = skeleton
+    }
+  }
+
+  // L15: JSON Statistical Sampling (if JSON)
+  if (pipeline.includes("json-sample")) {
+    const sampled = sampleJson(content)
+    if (sampled.sampled) content = sampled.result
+  }
+
   // L6: Read compression (outline for source files)
   let filtered = filterRead(filePath, content)
 
   // L13: Progressive disclosure
   const disclosed = await progressiveDisclosure(filtered, "read")
   filtered = disclosed.result
+
+  // L16: Reversible Compression (if still large)
+  const reversible = await applyReversibleCompression(filtered)
+  if (reversible.compressed) {
+    filtered = reversible.result
+  }
 
   // L14: Auto-escalation
   filtered = applyAutoEscalation(filtered)
@@ -202,7 +254,7 @@ async function applyReadFilter(filePath: string, content: string): Promise<strin
   return conservativeFilter(content, filtered)
 }
 
-// ─── GREP FILTER PIPELINE ───
+// ─── GREP FILTER PIPELINE (L1-L15 + L16-L24) ───
 async function applyGrepFilter(output: string): Promise<string> {
   // L0: Secret redaction
   output = redactSecrets(output)
@@ -231,13 +283,19 @@ async function applyGrepFilter(output: string): Promise<string> {
   const disclosed = await progressiveDisclosure(filtered, "grep")
   filtered = disclosed.result
 
+  // L16: Reversible Compression (if large)
+  const reversible = await applyReversibleCompression(filtered)
+  if (reversible.compressed) {
+    filtered = reversible.result
+  }
+
   // L14: Auto-escalation
   filtered = applyAutoEscalation(filtered)
 
   return conservativeFilter(output, filtered)
 }
 
-// ─── GLOB FILTER PIPELINE ───
+// ─── GLOB FILTER PIPELINE (L1-L15 + L16-L24) ───
 async function applyGlobFilter(output: string): Promise<string> {
   // L0: Secret redaction
   output = redactSecrets(output)
@@ -259,6 +317,12 @@ async function applyGlobFilter(output: string): Promise<string> {
   const disclosed = await progressiveDisclosure(filtered, "glob")
   filtered = disclosed.result
 
+  // L16: Reversible Compression (if large)
+  const reversible = await applyReversibleCompression(filtered)
+  if (reversible.compressed) {
+    filtered = reversible.result
+  }
+
   // L14: Auto-escalation
   filtered = applyAutoEscalation(filtered)
 
@@ -270,15 +334,22 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
   // L38: Load previous session memory
   const prevSession = await loadSessionSummary(directory)
 
+  // L1: Load symbol index
+  await loadIndex()
+
   return {
     // Session start — inject memory, reset state
     "session.created": async () => {
       resetDedup()
       resetEscalation()
+      resetLSPState(directory)
       await cleanupOffloaded()
+      await cleanupRewind()
 
-      // L43: Check cache-lock
-      // (rules/config hashing would go here if opencode exposes them)
+      // Index codebase in background
+      indexDirectory(directory).then((stats) => {
+        console.log(`[OpenToken] Indexed ${stats.filesIndexed} files, ${stats.totalSymbols} symbols`)
+      }).catch(() => {})
     },
 
     // Session end — save memory
@@ -290,24 +361,48 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
       await finalizeSession(directory)
     },
 
-    // L1-L4: Pre-call interception
+    // L1-L4 + L5: Pre-call interception
     "tool.execute.before": async (input: ToolInput, output: ToolOutput) => {
       const result = preCallFilter(input.tool, output.args || {})
 
       if (result.blocked) {
-        // Block the tool call
         output.result = `[OpenToken blocked] ${result.reason}`
         output.error = result.reason
         return
       }
 
       if (result.modifiedArgs) {
-        // Modify tool args (e.g., command rewrite)
         Object.assign(output.args, result.modifiedArgs)
+      }
+
+      // L5: LSP-First Enforcement — block grep/glob for symbols
+      if (input.tool === "grep" && typeof output.args?.pattern === "string") {
+        const block = shouldBlockGrep(output.args.pattern)
+        if (block.blocked) {
+          output.result = `[OpenToken LSP-first] ${block.suggestion}`
+          return
+        }
+      }
+
+      if (input.tool === "glob" && typeof output.args?.pattern === "string") {
+        const block = shouldBlockGlob(output.args.pattern)
+        if (block.blocked) {
+          output.result = `[OpenToken LSP-first] ${block.suggestion}`
+          return
+        }
+      }
+
+      // L5: Block shell grep for symbols
+      if (input.tool === "bash" && typeof output.args?.command === "string") {
+        const block = shouldBlockShellGrep(output.args.command)
+        if (block.blocked) {
+          output.result = `[OpenToken LSP-first] ${block.suggestion}`
+          return
+        }
       }
     },
 
-    // L5-L15: Post-call interception
+    // L5-L24: Post-call interception
     "tool.execute.after": async (input: ToolInput, output: ToolOutput) => {
       if (!output.result) return
 
@@ -316,6 +411,9 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
       const tool = input.tool
 
       trackToolCall()
+
+      // Track LSP usage
+      trackLSPUsage(directory, tool)
 
       switch (tool) {
         case "bash": {
@@ -351,7 +449,7 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
         trackTokensSaved(saved)
 
         // Update context tracking for auto-escalation
-        updateContext(beforeTokens) // Approximate context used
+        updateContext(beforeTokens)
 
         const family = tool === "bash" ? detectFamily(String(output.args?.command || "")) : tool
 

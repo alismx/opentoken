@@ -17,20 +17,20 @@
 - [x] #38 Session memory (inject previous session summary on start)
 - [x] #43 Cache-lock (session rules hashed, skip if unchanged)
 
-## Phase 2: Medium (Moderate Effort)
-- [ ] #10 AST-based code analysis via tree-sitter (web-tree-sitter WASM)
-- [ ] #11 Schema extraction for configs (extract JSON Schema, drop values)
-- [ ] #22 CSV smart sampling (sample rows, header + tail + stats)
-- [ ] #32 LSP-first enforcement (block grep for symbols when LSP available)
-- [ ] #34 Batch execution (combine multiple commands into one call)
-- [ ] #35 Sandbox execution (process files, only result enters context)
-- [ ] #45 HANDOFF/CHECKPOINT (structured context save/restore across sessions)
-- [ ] #50 Declarative YAML filters (config-driven rules engine)
+## Phase 2: Elite Techniques ✅ DONE
+- [x] #4 AST Skeleton Reads (tree-sitter/regex, 88% per read) — `skeleton.ts`
+- [x] #12 Diff Folding (collapse unchanged context lines) — `folding.ts`
+- [x] #13 Log Folding (collapse repeated log lines) — `folding.ts`
+- [x] #15 JSON Statistical Sampling (schema discovery + sampling) — `jsonsample.ts`
+- [x] #16 Reversible Compression (hash store + retrieve tool) — `rewind.ts`
+- [x] #20 Content-Aware Router (detect type, fire relevant stages) — `router.ts`
+- [x] #2 Think-in-Code Sandbox (write scripts instead of reading files) — `sandbox.ts`
+- [x] #1 Structural Symbol Index (find_symbol, get_function_source) — `symbolindex.ts`
+- [x] #5 LSP-First Enforcement (block grep for symbols) — `lspfirst.ts`
 
 ## Phase 3: Advanced (Complex)
 - [ ] #24 Semantic caching (vector similarity for read-only tool results)
 - [ ] #27 Persistent memory (SQLite + FTS5 + vector embeddings)
-- [ ] #28 Symbol-based navigation (find_symbol, get_function_source, call graph)
 - [ ] #29 Impact analysis (change impact, backward slicing)
 - [ ] #30 BM25 + semantic search hybrid (tantivy + candle embeddings)
 - [ ] #31 TextRank compression (graph-based sentence scoring)
@@ -41,6 +41,7 @@
 - [ ] #47 Intelligent content routing (route by file type with ML classifier)
 - [ ] #48 Tool pruning (remove unused tools from context)
 - [ ] #49 History compression (compress conversation history)
+- [ ] #50 Declarative YAML filters (config-driven rules engine)
 
 ## Architecture Notes
 - All techniques designed for OpenCode plugin API (tool.execute.before/after)
@@ -48,3 +49,19 @@
 - Conservative fallback: never worse than original
 - Error/failure preservation: never modified
 - UTF-8 safe: never truncate mid-character
+
+## Technique Sources
+| Technique | Source Tool | Max Savings |
+|-----------|-------------|-------------|
+| Structural Symbol Navigation | token-savior (815★) | -99.9% |
+| Think in Code Sandbox | context-mode | 200x |
+| AST Skeleton Reads | pith + claw-compactor | -88% |
+| Diff/Log Folding | claw-compactor | Part of 15-82% |
+| JSON Sampling | claw-compactor | -82% |
+| Reversible Compression | claw-compactor | Enables 82% |
+| Content-Aware Router | claw-compactor | <50ms pipeline |
+| LSP-First Enforcement | lsp-enforcement-kit | -80% |
+| Command Rewrite | rtk | 60-99% |
+| Cross-Call Dedup | squeez | 100% on hits |
+| Auto-Escalation | pith | Adaptive |
+| Session Memory | squeez | ~300 tok/session |

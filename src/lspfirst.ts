@@ -1,0 +1,207 @@
+// LSP-First Enforcement — inspired by lsp-enforcement-kit
+// Block Grep/Glob calls on code symbol patterns, force LSP tools instead
+// 80% savings on navigation
+
+interface LSPState {
+  navCount: number
+  readCount: number
+  lastNavTime: number
+  project: string
+}
+
+const LSP_STATE_DIR = process.env.HOME + "/.config/opentoken/lsp"
+const lspStates = new Map<string, LSPState>()
+
+// Detect if a grep query is looking for a code symbol
+function isSymbolQuery(query: string): boolean {
+  const patterns = [
+    // CamelCase symbols: UserService, handleFoo, MyComponent
+    /[A-Z][a-z]+[A-Z]\w*/,
+    // Function-like: send_message, handle_request
+    /\w+_\w+/,
+    // Class-like: *Service, *Controller, *Handler
+    /\*\w*(Service|Controller|Handler|Manager|Factory|Repository|Builder)\*/,
+    // Method-like: *.handle*, *.get*, *.set*, *.create*
+    /\*\w*(handle|get|set|create|update|delete|find|search)\w*\*/,
+    // Specific patterns
+    /class\s+\w+/,
+    /function\s+\w+/,
+    /def\s+\w+/,
+    /fn\s+\w+/,
+  ]
+
+  return patterns.some((p) => p.test(query))
+}
+
+// Detect if a glob query is looking for a symbol file
+function isSymbolGlob(query: string): boolean {
+  const patterns = [
+    // Looking for specific file patterns
+    /\*Service\*/,
+    /\*Controller\*/,
+    /\*Handler\*/,
+    /\*Manager\*/,
+    /\*Factory\*/,
+    /\*Repository\*/,
+    // Looking for test files
+    /\*test\*/,
+    /\*spec\*/,
+    // Looking for config files
+    /\*config\*/,
+    /\*settings\*/,
+  ]
+
+  return patterns.some((p) => p.test(query))
+}
+
+// Block Grep call if it's a symbol query
+export function shouldBlockGrep(query: string): { blocked: boolean; suggestion?: string } {
+  if (isSymbolQuery(query)) {
+    return {
+      blocked: true,
+      suggestion: `Use LSP tools instead of grep for symbol "${query}":\n- find_definition("${query}")\n- find_references("${query}")\n- get_hover("${query}")`,
+    }
+  }
+
+  return { blocked: false }
+}
+
+// Block Glob call if it's a symbol glob
+export function shouldBlockGlob(query: string): { blocked: boolean; suggestion?: string } {
+  if (isSymbolGlob(query)) {
+    return {
+      blocked: true,
+      suggestion: `Use LSP workspace symbols instead of glob for "${query}":\n- find_workspace_symbols("${query}")`,
+    }
+  }
+
+  return { blocked: false }
+}
+
+// Block shell grep/rg/ag commands
+export function shouldBlockShellGrep(command: string): { blocked: boolean; suggestion?: string } {
+  const grepPatterns = [
+    /(?:grep|rg|ag|ack)\s+.*[A-Z][a-z]+[A-Z]/, // CamelCase
+    /(?:grep|rg|ag|ack)\s+.*\w+_\w+/, // snake_case
+    /(?:grep|rg|ag|ack)\s+.*class\s+\w+/, // class definition
+    /(?:grep|rg|ag|ack)\s+.*function\s+\w+/, // function definition
+    /(?:grep|rg|ag|ack)\s+.*def\s+\w+/, // Python function
+  ]
+
+  if (grepPatterns.some((p) => p.test(command))) {
+    return {
+      blocked: true,
+      suggestion: "Use LSP tools instead of shell grep for code symbols",
+    }
+  }
+
+  return { blocked: false }
+}
+
+// Progressive Read Gate — enforce LSP-first workflow before allowing file reads
+export function shouldAllowRead(
+  filePath: string,
+  lspState: LSPState,
+): { allowed: boolean; gate?: string; suggestion?: string } {
+  // Gate 1: Warmup — force orient first
+  if (lspState.navCount === 0) {
+    return {
+      allowed: true, // Allow first read for warmup
+      gate: "warmup",
+    }
+  }
+
+  // Gate 2: Orient — require workspace symbol search
+  if (lspState.navCount < 3) {
+    return {
+      allowed: true,
+      gate: "orient",
+      suggestion: "Consider find_workspace_symbols() before reading more files",
+    }
+  }
+
+  // Gate 3: Nav — require targeted navigation
+  if (lspState.navCount < 10) {
+    return {
+      allowed: true,
+      gate: "nav",
+      suggestion: "Use find_definition() or find_references() for targeted navigation",
+    }
+  }
+
+  // Gate 4: Surgical — require precise reads
+  if (lspState.readCount > 20) {
+    return {
+      allowed: true,
+      gate: "surgical",
+      suggestion: "Use get_function_source() instead of full file reads",
+    }
+  }
+
+  // Gate 5: Limit — enforce read budget
+  if (lspState.readCount > 50) {
+    return {
+      allowed: false,
+      gate: "limit",
+      suggestion: "Read budget exceeded. Use LSP tools for further navigation",
+    }
+  }
+
+  return { allowed: true }
+}
+
+// Track LSP usage
+export function trackLSPUsage(project: string, tool: string): void {
+  const state = lspStates.get(project) || {
+    navCount: 0,
+    readCount: 0,
+    lastNavTime: 0,
+    project,
+  }
+
+  if (tool.includes("find_") || tool.includes("get_")) {
+    state.navCount++
+  } else if (tool === "read") {
+    state.readCount++
+  }
+
+  state.lastNavTime = Date.now()
+  lspStates.set(project, state)
+}
+
+// Get LSP state
+export function getLSPState(project: string): LSPState {
+  return lspStates.get(project) || {
+    navCount: 0,
+    readCount: 0,
+    lastNavTime: 0,
+    project,
+  }
+}
+
+// Reset LSP state for new session
+export function resetLSPState(project: string): void {
+  lspStates.set(project, {
+    navCount: 0,
+    readCount: 0,
+    lastNavTime: 0,
+    project,
+  })
+}
+
+// Block subagent delegation without pre-resolved LSP context
+export function shouldBlockSubagentDelegation(
+  project: string,
+  lspState?: LSPState,
+): { blocked: boolean; suggestion?: string } {
+  const state = lspState || getLSPState(project)
+
+  if (state.navCount < 2) {
+    return {
+      blocked: true,
+      suggestion: "Resolve LSP context before delegating to subagent. Use find_workspace_symbols() first.",
+    }
+  }
+
+  return { blocked: false }
+}
