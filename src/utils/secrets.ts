@@ -5,7 +5,7 @@ const SECRET_PATTERNS: RegExp[] = [
   // AWS
   /AKIA[0-9A-Z]{16}/g,
   // GitHub
-  /gh[pousr]_[A-Za-z0-9_]{36,}/g,
+  /gh[pousr]_[A-Za-z0-9_]{20,}/g,
   /github_pat_[A-Za-z0-9_]{22,}/g,
   // Stripe
   /sk_live_[0-9a-zA-Z]{24,}/g,

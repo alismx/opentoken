@@ -156,7 +156,7 @@ export async function cleanupRewind(maxAgeMs = 3600000): Promise<number> {
     if (now - entry.timestamp > maxAgeMs) {
       try {
         const filePath = path.join(REWIND_DIR, `${id}.txt`)
-        await Bun.file(filePath).exists() && await Bun.$`rm -f ${filePath}`.quiet()
+        await Bun.file(filePath).exists() && await Bun.$([`rm -f ${filePath}`]).quiet()
       } catch {
         // Ignore
       }
@@ -179,7 +179,10 @@ export function getRewindStats(): { total: number; totalSaved: number } {
 
 async function ensureDir(): Promise<void> {
   try {
-    await Bun.file(REWIND_DIR).exists() || await Bun.$`mkdir -p ${REWIND_DIR}`.quiet()
+    const dirExists = await Bun.file(REWIND_DIR).exists()
+    if (!dirExists) {
+      await Bun.$([`mkdir -p ${REWIND_DIR}`]).quiet()
+    }
   } catch {
     // Ignore
   }

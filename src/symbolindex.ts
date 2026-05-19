@@ -96,6 +96,16 @@ for (const [extensions, config] of Object.entries(SYMBOL_PATTERNS)) {
   }
 }
 
+// Add common aliases
+PATTERN_LOOKUP["ts"] = PATTERN_LOOKUP["typescript"]
+PATTERN_LOOKUP["tsx"] = PATTERN_LOOKUP["typescript"]
+PATTERN_LOOKUP["js"] = PATTERN_LOOKUP["javascript"]
+PATTERN_LOOKUP["jsx"] = PATTERN_LOOKUP["javascript"]
+PATTERN_LOOKUP["py"] = PATTERN_LOOKUP["python"]
+PATTERN_LOOKUP["rs"] = PATTERN_LOOKUP["rust"]
+PATTERN_LOOKUP["cs"] = PATTERN_LOOKUP["csharp"]
+PATTERN_LOOKUP["kt"] = PATTERN_LOOKUP["kotlin"]
+
 // Detect language from file extension
 function detectLanguage(filePath: string): string | null {
   const ext = path.extname(filePath).toLowerCase().slice(1)
@@ -208,7 +218,9 @@ async function findCodeFiles(dirPath: string, maxFiles: number): Promise<string[
   const files: string[] = []
 
   try {
-    const result = await Bun.$`find ${dirPath} -type f \( ${extensions.map((ext) => `-name "*${ext}"`).join(" -o ")} \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/target/*" -not -path "*/.cache/*` | head -n ${maxFiles}`.quiet()
+    const extPattern = extensions.map((ext) => `-name "*${ext}"`).join(" -o ")
+    const cmd = `find ${dirPath} -type f \\( ${extPattern} \\) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/target/*" -not -path "*/.cache/*" | head -n ${maxFiles}`
+    const result = await Bun.$([cmd]).quiet()
     files.push(...result.stdout.trim().split("\n").filter(Boolean))
   } catch {
     // Fallback: simple glob
@@ -326,7 +338,7 @@ export async function clearIndex(): Promise<void> {
   index.lastIndexed = 0
 
   try {
-    await Bun.$`rm -rf ${INDEX_DIR}`.quiet()
+    await Bun.$([`rm -rf ${INDEX_DIR}`]).quiet()
   } catch {
     // Ignore
   }
@@ -352,7 +364,10 @@ export function getIndexStats(): {
 
 async function ensureDir(): Promise<void> {
   try {
-    await Bun.file(INDEX_DIR).exists() || await Bun.$`mkdir -p ${INDEX_DIR}`.quiet()
+    const dirExists = await Bun.file(INDEX_DIR).exists()
+    if (!dirExists) {
+      await Bun.$([`mkdir -p ${INDEX_DIR}`]).quiet()
+    }
   } catch {
     // Ignore
   }

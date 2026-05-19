@@ -201,13 +201,13 @@ const LANGUAGE_PATTERNS: Record<string, { patterns: RegExp[]; commentPattern?: R
       // Import statements
       /^import\s+[\s\S]*?/gm,
       // Class declarations
-      ^(sealed\s+)?(abstract\s+)?(case\s+)?class\s+\w+/gm,
+      /^(sealed\s+)?(abstract\s+)?(case\s+)?class\s+\w+/gm,
       // Object declarations
-      ^(sealed\s+)?(abstract\s+)?(case\s+)?object\s+\w+/gm,
+      /^(sealed\s+)?(abstract\s+)?(case\s+)?object\s+\w+/gm,
       // Trait declarations
-      ^trait\s+\w+/gm,
+      /^trait\s+\w+/gm,
       // Function/val/var declarations
-      ^(def|val|var)\s+\w+/gm,
+      /^(def|val|var)\s+\w+/gm,
     ],
   },
   "csharp,cs": {
@@ -217,15 +217,15 @@ const LANGUAGE_PATTERNS: Record<string, { patterns: RegExp[]; commentPattern?: R
       // Namespace declarations
       /^namespace\s+[\s\S]*?/gm,
       // Class declarations
-      ^(public|private|internal|protected)?\s*(abstract|sealed|static)?\s*class\s+\w+/gm,
+      /^(public|private|internal|protected)?\s*(abstract|sealed|static)?\s*class\s+\w+/gm,
       // Interface declarations
-      ^(public|private|internal|protected)?\s*interface\s+\w+/gm,
+      /^(public|private|internal|protected)?\s*interface\s+\w+/gm,
       // Struct declarations
-      ^(public|private|internal|protected)?\s*struct\s+\w+/gm,
+      /^(public|private|internal|protected)?\s*struct\s+\w+/gm,
       // Method declarations
-      ^(public|private|internal|protected)?\s*(static|virtual|override|abstract|sealed)?\s*[\w<>\[\]]+\s+\w+\s*\(/gm,
+      /^(public|private|internal|protected)?\s*(static|virtual|override|abstract|sealed)?\s*[\w<>\[\]]+\s+\w+\s*\(/gm,
       // Property declarations
-      ^(public|private|internal|protected)?\s*(static|virtual|override)?\s*[\w<>\[\]]+\s+\w+\s*\{/gm,
+      /^(public|private|internal|protected)?\s*(static|virtual|override)?\s*[\w<>\[\]]+\s+\w+\s*\{/gm,
     ],
   },
 }
@@ -237,6 +237,16 @@ for (const [extensions, config] of Object.entries(LANGUAGE_PATTERNS)) {
     PATTERN_LOOKUP[ext.trim()] = config
   }
 }
+
+// Add common aliases
+PATTERN_LOOKUP["ts"] = PATTERN_LOOKUP["typescript"]
+PATTERN_LOOKUP["tsx"] = PATTERN_LOOKUP["typescript"]
+PATTERN_LOOKUP["js"] = PATTERN_LOOKUP["javascript"]
+PATTERN_LOOKUP["jsx"] = PATTERN_LOOKUP["javascript"]
+PATTERN_LOOKUP["py"] = PATTERN_LOOKUP["python"]
+PATTERN_LOOKUP["rs"] = PATTERN_LOOKUP["rust"]
+PATTERN_LOOKUP["cs"] = PATTERN_LOOKUP["csharp"]
+PATTERN_LOOKUP["kt"] = PATTERN_LOOKUP["kotlin"]
 
 // Detect language from file extension
 function detectLanguage(filePath: string): string | null {
@@ -338,7 +348,7 @@ export function getSkeletonSection(content: string, language: string, startLine:
 // Clear skeleton cache
 export async function clearSkeletonCache(): Promise<void> {
   try {
-    await Bun.$`rm -rf ${SKELETON_CACHE_DIR}`.quiet()
+    await Bun.$([`rm -rf ${SKELETON_CACHE_DIR}`]).quiet()
   } catch {
     // Ignore
   }

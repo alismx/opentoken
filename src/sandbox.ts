@@ -63,7 +63,7 @@ export async function executeSandbox(scriptPath: string, language: string): Prom
 
   try {
     const cmd = getRunCommand(language, scriptPath)
-    const result = await Bun.$`${cmd}`.quiet()
+    const result = await Bun.$([cmd]).quiet()
     stdout = result.stdout?.toString() || ""
     stderr = result.stderr?.toString() || ""
     exitCode = result.exitCode || 0
@@ -289,7 +289,10 @@ function createGoScript(task: string, files: string[]): string {
 
 async function ensureDir(): Promise<void> {
   try {
-    await Bun.file(SANDBOX_DIR).exists() || await Bun.$`mkdir -p ${SANDBOX_DIR}`.quiet()
+    const dirExists = await Bun.file(SANDBOX_DIR).exists()
+    if (!dirExists) {
+      await Bun.$([`mkdir -p ${SANDBOX_DIR}`]).quiet()
+    }
   } catch {
     // Ignore
   }

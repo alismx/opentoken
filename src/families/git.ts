@@ -30,8 +30,9 @@ export function filterGitStatus(output: string): string {
       continue
     }
     // Status lines: " M file.ts", "A  file.ts", "?? file.ts"
-    if (/^[AMDRCU?!\s]{2}\s+/.test(line)) {
-      changed.push(line)
+    // Also handle "modified:   file.ts" format
+    if (/^[AMDRCU?!\s]{2}\s+/.test(line) || /^\s+(modified|added|deleted|renamed|copied):\s+/.test(line)) {
+      changed.push(line.trim())
     }
   }
 

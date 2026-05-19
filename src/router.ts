@@ -69,15 +69,15 @@ const EXT_TO_LANG: Record<string, Language> = {
 
 // Content type detection patterns
 const TYPE_PATTERNS: { type: ContentType; pattern: RegExp }[] = [
-  { type: "json", pattern: /^\s*[\[{]/ },
   { type: "diff", pattern: /^diff --git/ },
+  { type: "log", pattern: /^\d{4}-\d{2}-\d{2}|\[INFO\]|\[WARN\]|\[ERROR\]/ },
+  { type: "json", pattern: /^\s*[\[{]/ },
   { type: "csv", pattern: /^[^,\n]+,[^,\n]+(,[^,\n]+)*\n/ },
   { type: "xml", pattern: /^\s*<\?xml/ },
   { type: "yaml", pattern: /^[\s-]*\w+:\s/ },
   { type: "html", pattern: /^\s*<!DOCTYPE|^\s*<html/ },
   { type: "sql", pattern: /^(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\s/i },
   { type: "markdown", pattern: /^#{1,6}\s|^[-*]\s|^\d+\.\s/ },
-  { type: "log", pattern: /^\d{4}-\d{2}-\d{2}|\[INFO\]|\[WARN\]|\[ERROR\]/ },
   { type: "shell", pattern: /^\$ |^#!/ },
 ]
 

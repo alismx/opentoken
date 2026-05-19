@@ -24,7 +24,10 @@ let offloadCounter = 0
 
 async function ensureDir(): Promise<void> {
   try {
-    await Bun.file(OFFLOAD_DIR).exists() || await Bun.$`mkdir -p ${OFFLOAD_DIR}`.quiet()
+    const dirExists = await Bun.file(OFFLOAD_DIR).exists()
+    if (!dirExists) {
+      await Bun.$([`mkdir -p ${OFFLOAD_DIR}`]).quiet()
+    }
   } catch {
     // Ignore
   }
@@ -138,7 +141,7 @@ export async function cleanupOffloaded(maxAgeMs = 3600000): Promise<number> {
   for (const [id, entry] of offloadStore.entries()) {
     if (now - entry.timestamp > maxAgeMs) {
       try {
-        await Bun.file(entry.filePath).exists() && await Bun.$`rm -f ${entry.filePath}`.quiet()
+        await Bun.file(entry.filePath).exists() && await Bun.$([`rm -f ${entry.filePath}`]).quiet()
       } catch {
         // Ignore
       }
