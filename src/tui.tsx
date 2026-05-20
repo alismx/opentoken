@@ -1,7 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 /** @jsxRuntime automatic */
 import type { TuiPlugin, TuiSlotContext, TuiTheme } from "@opencode-ai/plugin/tui"
-import type { Event } from "@opencode-ai/sdk/v2"
 import { createSignal, onCleanup, onMount } from "solid-js"
 import path from "path"
 import os from "os"
@@ -28,71 +27,46 @@ function formatDuration(ms: number): string {
   return `${seconds}s`
 }
 
-interface MetricsResult {
-  tokensSaved: number
-  toolCalls: number
-}
-
-// Read only metrics from the current session (after sessionStart)
-async function readCurrentSessionMetrics(sessionStart: number): Promise<MetricsResult> {
-  try {
-    const file = Bun.file(METRICS_FILE)
-    if (!(await file.exists())) return { tokensSaved: 0, toolCalls: 0 }
-    const text = await file.text()
-    const lines = text.trim().split("\n").filter((l) => l.trim())
-    if (lines.length === 0) return { tokensSaved: 0, toolCalls: 0 }
-
-    let totalSaved = 0
-    let totalCalls = 0
-    const sessionStartMs = sessionStart
-
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line)
-        // Only count entries from current session
-        const entryTs = new Date(entry.ts).getTime()
-        if (entryTs >= sessionStartMs) {
-          totalSaved += entry.before_tokens - entry.after_tokens
-          totalCalls++
-        }
-      } catch {
-        // skip malformed
-      }
-    }
-
-    return { tokensSaved: totalSaved, toolCalls: totalCalls }
-  } catch {
-    return { tokensSaved: 0, toolCalls: 0 }
-  }
-}
-
-function StatusBarWidget(props: { theme: TuiTheme; sessionStart: () => number | null }) {
+function StatusBarWidget(props: { theme: TuiTheme }) {
   const [display, setDisplay] = createSignal("")
+  const sessionStart = Date.now()
 
   let metricsInterval: ReturnType<typeof setInterval>
 
   async function loadMetrics() {
-    const start = props.sessionStart()
-    if (!start) {
-      setDisplay(" opentoken")
-      return
-    }
+    try {
+      const file = Bun.file(METRICS_FILE)
+      if (await file.exists()) {
+        const text = await file.text()
+        const lines = text.trim().split("\n").filter((l) => l.trim())
+        const recent = lines.slice(-50)
+        let totalSaved = 0
+        let totalCalls = 0
 
-    const metrics = await readCurrentSessionMetrics(start)
+        for (const line of recent) {
+          try {
+            const entry = JSON.parse(line)
+            totalSaved += (entry.before_tokens || 0) - (entry.after_tokens || 0)
+            totalCalls++
+          } catch { /* skip */ }
+        }
+
+        const time = formatTime(new Date())
+        const duration = formatDuration(Date.now() - sessionStart)
+
+        if (totalSaved > 0) {
+          setDisplay(` opentoken  saved ${formatTokens(totalSaved)} tokens  ${totalCalls} calls  ${duration}  ${time}`)
+        } else {
+          setDisplay(` opentoken  ready  ${duration}  ${time}`)
+        }
+        return
+      }
+    } catch { /* fall through */ }
+
+    // Fallback: just show time and duration
     const time = formatTime(new Date())
-    const duration = formatDuration(Date.now() - start)
-
-    // Compression level emoji
-    const levelEmoji = "🌸"
-
-    let text: string
-    if (metrics.tokensSaved > 0) {
-      text = `${levelEmoji} opentoken  saved ${formatTokens(metrics.tokensSaved)} tokens  ${metrics.toolCalls} calls  ${duration}  ${time}`
-    } else {
-      text = `${levelEmoji} opentoken  ready  ${duration}  ${time}`
-    }
-
-    setDisplay(text)
+    const duration = formatDuration(Date.now() - sessionStart)
+    setDisplay(` opentoken  ready  ${duration}  ${time}`)
   }
 
   onMount(() => {
@@ -110,21 +84,11 @@ function StatusBarWidget(props: { theme: TuiTheme; sessionStart: () => number | 
 }
 
 const plugin: TuiPlugin = async (api, _options, _meta) => {
-  const [sessionStart, setSessionStart] = createSignal<number | null>(null)
-
-  api.event.on("session.created", () => {
-    setSessionStart(Date.now())
-  })
-
-  api.event.on("session.deleted", () => {
-    setSessionStart(null)
-  })
-
   api.slots.register({
     order: 50,
     slots: {
       session_prompt_right(ctx: TuiSlotContext, _props: { session_id: string }) {
-        return <StatusBarWidget theme={ctx.theme} sessionStart={sessionStart} />
+        return <StatusBarWidget theme={ctx.theme} />
       },
     },
   })
