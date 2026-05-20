@@ -32,8 +32,14 @@ cp "$PLUGIN_DIR/index.ts" "$PLUGIN_FILE"
 # Update imports in the entry file to point to subdirectory
 sed -i 's|from "./|from "./opentoken/|g' "$PLUGIN_FILE"
 
-# Copy the dependency declaration
-cp "$TMPDIR/.opencode/package.json" "$PLUGIN_DIR/package.json"
+# Copy the dependency declaration (inline, not from repo)
+cat > "$PLUGIN_DIR/package.json" << 'EOF'
+{
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.15.5"
+  }
+}
+EOF
 
 # Cleanup
 rm -rf "$TMPDIR"
