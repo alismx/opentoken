@@ -29,14 +29,6 @@ function formatDuration(ms: number): string {
   return `${seconds}s`
 }
 
-interface StatusBarState {
-  tokensSaved: number
-  toolCalls: number
-  compressionLevel: string
-  sessionStart: number | null
-  isStreaming: boolean
-}
-
 async function readSessionMemory(): Promise<{ tokensSaved: number; toolCalls: number } | null> {
   try {
     const file = Bun.file(SESSION_FILE)
@@ -66,81 +58,49 @@ async function readStatsSummary(): Promise<{ totalSavedTokens: number; totalCall
   return null
 }
 
-function StatusBarWidget(props: { theme: TuiTheme; getMetrics: () => { isStreaming: boolean; isComplete: boolean } | null }) {
-  const [time, setTime] = createSignal(formatTime(new Date()))
-  const [state, setState] = createSignal<StatusBarState>({
-    tokensSaved: 0,
-    toolCalls: 0,
-    compressionLevel: "off",
-    sessionStart: null,
-    isStreaming: false,
-  })
+function StatusBarWidget(props: { theme: TuiTheme }) {
+  const [display, setDisplay] = createSignal("")
 
   let clockInterval: ReturnType<typeof setInterval>
   let metricsInterval: ReturnType<typeof setInterval>
 
+  function buildDisplay(): string {
+    const tokensSaved = 0 // Will be updated by metrics polling
+    const time = formatTime(new Date())
+    return ` opentoken   ${time}`
+  }
+
   async function loadMetrics() {
     const session = await readSessionMemory()
     const stats = await readStatsSummary()
+    const saved = session?.tokensSaved ?? stats?.totalSavedTokens ?? 0
+    const time = formatTime(new Date())
 
-    setState((prev) => ({
-      ...prev,
-      tokensSaved: session?.tokensSaved ?? stats?.totalSavedTokens ?? prev.tokensSaved,
-      toolCalls: session?.toolCalls ?? stats?.totalCalls ?? prev.toolCalls,
-    }))
+    const text = saved > 0
+      ? ` opentoken  saved ${formatTokens(saved)} tokens   ${time}`
+      : ` opentoken   ${time}`
+
+    setDisplay(text)
   }
 
   onMount(() => {
-    clockInterval = setInterval(() => {
-      setTime(formatTime(new Date()))
-    }, 1000)
-
+    setDisplay(buildDisplay())
     loadMetrics()
     metricsInterval = setInterval(loadMetrics, 5000)
   })
 
   onCleanup(() => {
-    clearInterval(clockInterval)
     clearInterval(metricsInterval)
   })
 
-  const s = state()
-  const accent = props.theme.current.accent
-  const muted = props.theme.current.textMuted
-  const text = props.theme.current.text
-
-  const levelEmoji = s.compressionLevel === "ceiling" ? "🔥" : s.compressionLevel === "ultra" ? "⚡" : s.compressionLevel === "lean" ? "🍃" : "💤"
-  const duration = s.sessionStart ? formatDuration(Date.now() - s.sessionStart) : ""
-
-  const leftText = s.tokensSaved > 0
-    ? `🌸 opentoken ${levelEmoji} saved ${formatTokens(s.tokensSaved)} tokens`
-    : `🌸 opentoken ${levelEmoji} ready`
-
-  const rightText = [duration, formatTime(new Date())].filter(Boolean).join("  ")
-
   return (
-    <text fg={text}>
-      <text fg={accent}>{leftText}</text>
-      <text fg={muted}>{"   "}</text>
-      <text fg={muted}>{rightText}</text>
-    </text>
+    <text fg={props.theme.current.text}>{display()}</text>
   )
 }
 
 const plugin: TuiPlugin = async (api, _options, _meta) => {
   // Track session state for event-driven updates
   const [sessionStart, setSessionStart] = createSignal<number | null>(null)
-  const [isStreaming, setIsStreaming] = createSignal(false)
-
-  // Listen to session events for instant updates
-  api.event.on("session.status", (event: Extract<Event, { type: "session.status" }>) => {
-    const status = event.properties.status
-    if (status?.type === "busy") {
-      setIsStreaming(true)
-    } else if (status?.type === "idle") {
-      setIsStreaming(false)
-    }
-  })
 
   api.event.on("session.created", () => {
     setSessionStart(Date.now())
@@ -151,17 +111,11 @@ const plugin: TuiPlugin = async (api, _options, _meta) => {
   })
 
   // Use session_prompt_right slot — proven by opencodeBar reference plugin
-  // This renders inline text next to the prompt, more visible than app_bottom
   api.slots.register({
     order: 50,
     slots: {
       session_prompt_right(ctx: TuiSlotContext, _props: { session_id: string }) {
-        return (
-          <StatusBarWidget
-            theme={ctx.theme}
-            getMetrics={() => ({ isStreaming: isStreaming(), isComplete: false })}
-          />
-        )
+        return <StatusBarWidget theme={ctx.theme} />
       },
     },
   })
