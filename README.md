@@ -47,6 +47,9 @@ OpenToken installs as an OpenCode plugin and hooks into the tool execution lifec
 | Conservative | If filtered output ≥ original size → return original |
 | Secrets | Redacted BEFORE any filtering (33+ patterns) |
 | Binary | Detected and suppressed |
+| Graceful degradation | If any pipeline stage fails, it's skipped — the plugin never crashes your session |
+| Input validation | Tool names whitelisted, file paths validated against project root |
+| Size limits | 10MB hard limit on tool output (configurable) |
 
 ## Requirements
 
@@ -54,6 +57,8 @@ OpenToken installs as an OpenCode plugin and hooks into the tool execution lifec
 - **OpenCode** with plugin support
 
 ## Install
+
+### Via npm
 
 ```bash
 npm install opentoken
@@ -71,6 +76,42 @@ Then add to your OpenCode config:
 }
 ```
 
+### Via GitHub (latest)
+
+```bash
+npm install github:MrGray17/opentoken
+```
+
+### Per-project (local copy)
+
+```bash
+cp -r node_modules/opentoken/src /your/project/.opencode/plugins/opentoken
+```
+
+## Configuration
+
+Create `~/.config/opentoken/config.json` (all fields optional):
+
+```json
+{
+  "maxOutputBytes": 10485760,
+  "maxProcessingMs": 5000,
+  "safeReadRoot": "/path/to/project",
+  "enableMetrics": true,
+  "enableSymbolIndex": true,
+  "conservativeUseTokens": false
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `maxOutputBytes` | 10MB | Hard limit — reject outputs larger than this |
+| `maxProcessingMs` | 5000 | Timeout per pipeline stage |
+| `safeReadRoot` | project dir | Only allow reads under this directory |
+| `enableMetrics` | true | Track token savings to disk |
+| `enableSymbolIndex` | true | Build and query symbol index at startup |
+| `conservativeUseTokens` | false | Use token count (slower) vs byte count (faster) for safety check |
+
 ## Data Storage
 
 All state is stored in `~/.config/opentoken/`:
@@ -82,6 +123,16 @@ All state is stored in `~/.config/opentoken/`:
 | `offload/` | Progressive disclosure temp files | Auto-cleaned after 1 hour |
 | `rewind/` | Reversible compression store | Auto-cleaned after 1 hour |
 | `index/symbols.json` | Symbol index cache | Overwritten each session |
+
+## Security
+
+OpenToken is designed with defense-in-depth:
+
+- **Path traversal protection** — File paths are validated to resolve within the project directory
+- **Input validation** — Tool names are whitelisted and sanitized
+- **Output size limits** — Prevents memory exhaustion from oversized tool outputs
+- **Graceful degradation** — Every pipeline stage is wrapped in error handling; a single failure never crashes the session
+- **Secret redaction** — Runs first in every pipeline, before any other processing (33+ patterns including API keys, tokens, passwords, private keys)
 
 ## License
 
