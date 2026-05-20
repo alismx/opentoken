@@ -2,6 +2,9 @@
 // Block Grep/Glob calls on code symbol patterns, force LSP tools instead
 // 80% savings on navigation
 
+import path from "path"
+import os from "os"
+
 interface LSPState {
   navCount: number
   readCount: number
@@ -9,7 +12,7 @@ interface LSPState {
   project: string
 }
 
-const LSP_STATE_DIR = process.env.HOME + "/.config/opentoken/lsp"
+const LSP_STATE_DIR = path.join(os.homedir(), ".config", "opentoken", "lsp")
 const lspStates = new Map<string, LSPState>()
 
 // Detect if a grep query is looking for a code symbol
@@ -98,58 +101,6 @@ export function shouldBlockShellGrep(command: string): { blocked: boolean; sugge
   return { blocked: false }
 }
 
-// Progressive Read Gate — enforce LSP-first workflow before allowing file reads
-export function shouldAllowRead(
-  filePath: string,
-  lspState: LSPState,
-): { allowed: boolean; gate?: string; suggestion?: string } {
-  // Gate 1: Warmup — force orient first
-  if (lspState.navCount === 0) {
-    return {
-      allowed: true, // Allow first read for warmup
-      gate: "warmup",
-    }
-  }
-
-  // Gate 2: Orient — require workspace symbol search
-  if (lspState.navCount < 3) {
-    return {
-      allowed: true,
-      gate: "orient",
-      suggestion: "Consider find_workspace_symbols() before reading more files",
-    }
-  }
-
-  // Gate 3: Nav — require targeted navigation
-  if (lspState.navCount < 10) {
-    return {
-      allowed: true,
-      gate: "nav",
-      suggestion: "Use find_definition() or find_references() for targeted navigation",
-    }
-  }
-
-  // Gate 4: Surgical — require precise reads
-  if (lspState.readCount > 20) {
-    return {
-      allowed: true,
-      gate: "surgical",
-      suggestion: "Use get_function_source() instead of full file reads",
-    }
-  }
-
-  // Gate 5: Limit — enforce read budget
-  if (lspState.readCount > 50) {
-    return {
-      allowed: false,
-      gate: "limit",
-      suggestion: "Read budget exceeded. Use LSP tools for further navigation",
-    }
-  }
-
-  return { allowed: true }
-}
-
 // Track LSP usage
 export function trackLSPUsage(project: string, tool: string): void {
   const state = lspStates.get(project) || {
@@ -169,16 +120,6 @@ export function trackLSPUsage(project: string, tool: string): void {
   lspStates.set(project, state)
 }
 
-// Get LSP state
-export function getLSPState(project: string): LSPState {
-  return lspStates.get(project) || {
-    navCount: 0,
-    readCount: 0,
-    lastNavTime: 0,
-    project,
-  }
-}
-
 // Reset LSP state for new session
 export function resetLSPState(project: string): void {
   lspStates.set(project, {
@@ -187,21 +128,4 @@ export function resetLSPState(project: string): void {
     lastNavTime: 0,
     project,
   })
-}
-
-// Block subagent delegation without pre-resolved LSP context
-export function shouldBlockSubagentDelegation(
-  project: string,
-  lspState?: LSPState,
-): { blocked: boolean; suggestion?: string } {
-  const state = lspState || getLSPState(project)
-
-  if (state.navCount < 2) {
-    return {
-      blocked: true,
-      suggestion: "Resolve LSP context before delegating to subagent. Use find_workspace_symbols() first.",
-    }
-  }
-
-  return { blocked: false }
 }

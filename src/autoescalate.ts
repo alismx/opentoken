@@ -29,7 +29,7 @@ const state: EscalationState = {
 
 // Update context tracking
 export function updateContext(used: number, total?: number): CompressionLevel {
-  state.contextUsed = used
+  state.contextUsed += used
   if (total) state.contextTotal = total
   state.fillPct = state.contextUsed / state.contextTotal
 
@@ -114,9 +114,7 @@ function applyLeanCompression(text: string): string {
     "implementing": "adding",
     "implementation": "impl",
     "functionality": "feature",
-    "functionality": "features",
     "approximately": "~",
-    "approximately": "about",
     "subsequently": "then",
     "nevertheless": "but",
     "nonetheless": "but",

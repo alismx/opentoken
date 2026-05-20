@@ -70,7 +70,8 @@ const EXT_TO_LANG: Record<string, Language> = {
 // Content type detection patterns
 const TYPE_PATTERNS: { type: ContentType; pattern: RegExp }[] = [
   { type: "diff", pattern: /^diff --git/ },
-  { type: "log", pattern: /^\d{4}-\d{2}-\d{2}|\[INFO\]|\[WARN\]|\[ERROR\]/ },
+  { type: "log", pattern: /^\d{4}-\d{2}-\d{2}/ },
+  { type: "log", pattern: /\[INFO\]|\[WARN\]|\[ERROR\]/ },
   { type: "json", pattern: /^\s*[\[{]/ },
   { type: "csv", pattern: /^[^,\n]+,[^,\n]+(,[^,\n]+)*\n/ },
   { type: "xml", pattern: /^\s*<\?xml/ },
@@ -226,18 +227,4 @@ function determineCompressionCandidates(
 // Get compression pipeline for content
 export function getCompressionPipeline(analysis: ContentAnalysis): string[] {
   return analysis.compressionCandidates
-}
-
-// Quick content type detection (for fast routing)
-export function quickTypeDetect(content: string): ContentType {
-  if (content.length < 100) return "text"
-
-  if (content.includes("diff --git")) return "diff"
-  if (content.startsWith("{") || content.startsWith("[")) return "json"
-  if (content.includes("[INFO]") || content.includes("[ERROR]")) return "log"
-  if (content.startsWith("<")) return "xml"
-  if (content.includes("---") && content.includes("...")) return "yaml"
-  if (content.includes("#include") || content.includes("import ")) return "code"
-
-  return "text"
 }

@@ -65,7 +65,7 @@ function filterMarkdown(content: string): string {
     if (line.startsWith("```")) {
       if (inCodeBlock) {
         result.push(`\`\`\` [${codeBlockLines} lines]`)
-        codeBlock = 0
+        codeBlockLines = 0
         inCodeBlock = false
       } else {
         inCodeBlock = true

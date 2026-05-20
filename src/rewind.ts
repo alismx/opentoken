@@ -52,7 +52,11 @@ export async function compressAndStore(content: string): Promise<{
     compressedSize: 0,
   }
 
-  await Bun.write(path.join(REWIND_DIR, `${id}.txt`), content)
+  try {
+    await Bun.write(path.join(REWIND_DIR, `${id}.txt`), content)
+  } catch {
+    // Disk write failed — continue with in-memory only
+  }
 
   // Calculate compressed size
   entry.compressedSize = entry.compressed.length
@@ -68,37 +72,6 @@ export async function compressAndStore(content: string): Promise<{
     entryId: id,
     compressionRatio,
   }
-}
-
-// Retrieve original content by marker ID
-export async function retrieveCompressed(id: string): Promise<string | null> {
-  // Check in-memory store first
-  const entry = rewindStore.get(id)
-  if (entry) return entry.original
-
-  // Check on-disk store
-  try {
-    const filePath = path.join(REWIND_DIR, `${id}.txt`)
-    const file = Bun.file(filePath)
-    if (await file.exists()) {
-      const content = await file.text()
-      // Re-add to in-memory store
-      rewindStore.set(id, {
-        id,
-        original: content,
-        compressed: compressContent(content),
-        marker: `[COMPRESSED:${id}]`,
-        timestamp: Date.now(),
-        size: content.length,
-        compressedSize: 0,
-      })
-      return content
-    }
-  } catch {
-    // File not found
-  }
-
-  return null
 }
 
 // Compress content (simple compression strategies)
@@ -156,7 +129,10 @@ export async function cleanupRewind(maxAgeMs = 3600000): Promise<number> {
     if (now - entry.timestamp > maxAgeMs) {
       try {
         const filePath = path.join(REWIND_DIR, `${id}.txt`)
-        await Bun.file(filePath).exists() && await Bun.$([`rm -f ${filePath}`]).quiet()
+        if (await Bun.file(filePath).exists()) {
+          const proc = Bun.spawn(["rm", "-f", filePath])
+          await proc.exited
+        }
       } catch {
         // Ignore
       }
@@ -168,20 +144,12 @@ export async function cleanupRewind(maxAgeMs = 3600000): Promise<number> {
   return cleaned
 }
 
-// Get rewind stats
-export function getRewindStats(): { total: number; totalSaved: number } {
-  let totalSaved = 0
-  for (const entry of rewindStore.values()) {
-    totalSaved += entry.size - entry.compressedSize
-  }
-  return { total: rewindStore.size, totalSaved }
-}
-
 async function ensureDir(): Promise<void> {
   try {
     const dirExists = await Bun.file(REWIND_DIR).exists()
     if (!dirExists) {
-      await Bun.$([`mkdir -p ${REWIND_DIR}`]).quiet()
+      const proc = Bun.spawn(["mkdir", "-p", REWIND_DIR])
+      await proc.exited
     }
   } catch {
     // Ignore

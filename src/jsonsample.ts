@@ -187,19 +187,3 @@ export function sampleJson(content: string): { result: string; sampled: boolean 
 
   return { result: content, sampled: false }
 }
-
-// Get specific items from a JSON array by index
-export function getJsonItems(content: string, indices: number[]): string {
-  try {
-    const parsed = JSON.parse(content)
-    if (!Array.isArray(parsed)) return "Error: content is not a JSON array"
-
-    const items = indices
-      .filter((i) => i >= 0 && i < parsed.length)
-      .map((i) => parsed[i])
-
-    return JSON.stringify(items, null, 2)
-  } catch {
-    return "Error: invalid JSON"
-  }
-}

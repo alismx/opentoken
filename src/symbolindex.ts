@@ -219,84 +219,15 @@ async function findCodeFiles(dirPath: string, maxFiles: number): Promise<string[
 
   try {
     const extPattern = extensions.map((ext) => `-name "*${ext}"`).join(" -o ")
-    const cmd = `find ${dirPath} -type f \\( ${extPattern} \\) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/target/*" -not -path "*/.cache/*" | head -n ${maxFiles}`
-    const result = await Bun.$([cmd]).quiet()
-    files.push(...result.stdout.trim().split("\n").filter(Boolean))
+    const cmd = `find "$1" -type f \\( ${extPattern} \\) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/target/*" -not -path "*/.cache/*" | head -n "$2"`
+    const result = await Bun.spawn(["bash", "-c", cmd, "find", dirPath, String(maxFiles)])
+    const output = await new Response(result.stdout).text()
+    files.push(...output.trim().split("\n").filter(Boolean))
   } catch {
     // Fallback: simple glob
   }
 
   return files.slice(0, maxFiles)
-}
-
-// Find symbol by name
-export function findSymbol(name: string): SymbolEntry[] {
-  return index.symbols.get(name) || []
-}
-
-// Find symbol by fuzzy name
-export function findSymbolFuzzy(query: string, maxResults = 10): SymbolEntry[] {
-  const results: SymbolEntry[] = []
-  const queryLower = query.toLowerCase()
-
-  for (const [name, symbols] of index.symbols.entries()) {
-    if (name.toLowerCase().includes(queryLower)) {
-      results.push(...symbols)
-    }
-    if (results.length >= maxResults) break
-  }
-
-  return results.slice(0, maxResults)
-}
-
-// Get function source by symbol ID
-export async function getFunctionSource(symbolId: string): Promise<string | null> {
-  // Find symbol in index
-  for (const symbols of index.symbols.values()) {
-    const symbol = symbols.find((s) => s.id === symbolId)
-    if (symbol) {
-      try {
-        const content = await Bun.file(symbol.filePath).text()
-        const lines = content.split("\n")
-        // Extract function body (simplified: get next 50 lines)
-        return lines.slice(symbol.line - 1, symbol.line + 49).join("\n")
-      } catch {
-        return null
-      }
-    }
-  }
-  return null
-}
-
-// Get change impact — find all callers of a symbol
-export function getChangeImpact(symbolName: string): {
-  directCallers: number
-  transitiveCallers: number
-  affectedFiles: string[]
-} {
-  const symbols = index.symbols.get(symbolName) || []
-  const affectedFiles = new Set<string>()
-  let directCallers = 0
-  let transitiveCallers = 0
-
-  for (const symbol of symbols) {
-    if (symbol.callers) {
-      directCallers += symbol.callers.length
-      for (const caller of symbol.callers) {
-        const callerSymbols = index.symbols.get(caller) || []
-        transitiveCallers += callerSymbols.length
-        for (const cs of callerSymbols) {
-          affectedFiles.add(cs.filePath)
-        }
-      }
-    }
-  }
-
-  return {
-    directCallers,
-    transitiveCallers,
-    affectedFiles: [...affectedFiles],
-  }
 }
 
 // Save index to disk
@@ -331,42 +262,12 @@ export async function loadIndex(): Promise<boolean> {
   }
 }
 
-// Clear index
-export async function clearIndex(): Promise<void> {
-  index.symbols.clear()
-  index.files.clear()
-  index.lastIndexed = 0
-
-  try {
-    await Bun.$([`rm -rf ${INDEX_DIR}`]).quiet()
-  } catch {
-    // Ignore
-  }
-}
-
-// Get index stats
-export function getIndexStats(): {
-  totalSymbols: number
-  totalFiles: number
-  lastIndexed: string
-} {
-  let totalSymbols = 0
-  for (const symbols of index.symbols.values()) {
-    totalSymbols += symbols.length
-  }
-
-  return {
-    totalSymbols,
-    totalFiles: index.files.size,
-    lastIndexed: index.lastIndexed > 0 ? new Date(index.lastIndexed).toISOString() : "never",
-  }
-}
-
 async function ensureDir(): Promise<void> {
   try {
     const dirExists = await Bun.file(INDEX_DIR).exists()
     if (!dirExists) {
-      await Bun.$([`mkdir -p ${INDEX_DIR}`]).quiet()
+      const proc = Bun.spawn(["mkdir", "-p", INDEX_DIR])
+      await proc.exited
     }
   } catch {
     // Ignore

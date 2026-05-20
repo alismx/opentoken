@@ -26,7 +26,7 @@ export function stripThinkingBlocks(text: string): string {
 }
 
 // #16: Binary detection via NUL byte scan
-export function isBinaryOutput(text: string): boolean {
+function isBinaryOutput(text: string): boolean {
   // Check first 8KB for NUL bytes
   const sample = text.slice(0, 8192)
   const nulCount = (sample.match(/\0/g) || []).length
@@ -116,7 +116,7 @@ const LONG_KEY_MAP: Record<string, string> = {
   request: "req",
   requests: "reqs",
   response: "res",
-  responses: "reses",
+  responses: "resps",
   error: "err",
   errors: "errs",
   warning: "warn",
@@ -197,8 +197,6 @@ const NULLISH_PATTERNS: RegExp[] = [
   /,\s*"[^"]*"\s*:\s*""/g,
   /,\s*"[^"]*"\s*:\s*\[\s*\]/g,
   /,\s*"[^"]*"\s*:\s*\{\s*\}/g,
-  /,\s*"[^"]*"\s*:\s*false/g,
-  /,\s*"[^"]*"\s*:\s*0(?![\d.])/g,
 ]
 
 const TIMESTAMP_PATTERNS: RegExp[] = [
@@ -207,7 +205,6 @@ const TIMESTAMP_PATTERNS: RegExp[] = [
 ]
 
 const REDUNDANT_PATTERNS: RegExp[] = [
-  /,\s*"(id|uuid|_id|oid)"\s*:\s*"[a-f0-9-]{20,}"/g,
   /,\s*"(hash|checksum|signature|digest)"\s*:\s*"[a-f0-9]{20,}"/g,
   /,\s*"(_links|_embedded|_meta|pagination|page_info)"\s*:\s*\{[^}]*\}/g,
   /,\s*"(version|v|rev)"\s*:\s*"?[\d.]+"?/g,
@@ -219,7 +216,7 @@ export function cleanWhitespaceAndNulls(text: string): string {
 
   let result = text
 
-  // Strip null/empty/false/0 values
+  // Strip null/empty values
   for (const pattern of NULLISH_PATTERNS) {
     result = result.replace(pattern, "")
   }
@@ -234,7 +231,8 @@ export function cleanWhitespaceAndNulls(text: string): string {
     result = result.replace(pattern, "")
   }
 
-  // Clean up trailing commas and extra whitespace
+  // Clean up trailing commas, double commas, and extra whitespace
+  result = result.replace(/,(\s*,)+/g, ",")
   result = result.replace(/,\s*}/g, "}")
   result = result.replace(/,\s*]/g, "]")
   result = result.replace(/\{\s*,/g, "{")

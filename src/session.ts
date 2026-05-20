@@ -1,13 +1,11 @@
-// Session memory + cache-lock (#38, #43)
-// #38: Inject previous session summary on start
-// #43: Cache-lock — session rules hashed, skip if unchanged
+// Session memory (#38)
+// Inject previous session summary on start
 
 import path from "path"
 import os from "os"
 
 const MEMORY_DIR = path.join(os.homedir(), ".config", "opentoken")
 const SESSION_FILE = path.join(MEMORY_DIR, "session-memory.json")
-const CACHE_LOCK_FILE = path.join(MEMORY_DIR, "cache-lock.json")
 
 interface SessionSummary {
   timestamp: number
@@ -19,22 +17,6 @@ interface SessionSummary {
   decisions: string[]
   toolCalls: number
   tokensSaved: number
-}
-
-interface CacheLock {
-  rulesHash: string
-  configHash: string
-  lastChecked: number
-  skipCount: number
-}
-
-// Hash function for cache-lock
-function hashString(text: string): string {
-  let h = 0
-  for (let i = 0; i < text.length; i++) {
-    h = ((h << 5) - h + text.charCodeAt(i)) | 0
-  }
-  return h.toString(36)
 }
 
 // #38: Session memory — save current session summary
@@ -106,71 +88,11 @@ export async function loadSessionSummary(project?: string): Promise<string | nul
   }
 }
 
-// #43: Cache-lock — check if rules/config unchanged
-export async function checkCacheLock(rules: string, config: string): Promise<{
-  shouldSkip: boolean
-  skipCount: number
-}> {
-  try {
-    const rulesHash = hashString(rules)
-    const configHash = hashString(config)
-
-    const file = Bun.file(CACHE_LOCK_FILE)
-    if (!(await file.exists())) {
-      // First run — create lock
-      await Bun.write(CACHE_LOCK_FILE, JSON.stringify({
-        rulesHash,
-        configHash,
-        lastChecked: Date.now(),
-        skipCount: 0,
-      }))
-      return { shouldSkip: false, skipCount: 0 }
-    }
-
-    const lock: CacheLock = JSON.parse(await file.text())
-
-    if (lock.rulesHash === rulesHash && lock.configHash === configHash) {
-      // Rules unchanged — increment skip count
-      lock.skipCount++
-      lock.lastChecked = Date.now()
-      await Bun.write(CACHE_LOCK_FILE, JSON.stringify(lock))
-      return { shouldSkip: true, skipCount: lock.skipCount }
-    }
-
-    // Rules changed — reset lock
-    await Bun.write(CACHE_LOCK_FILE, JSON.stringify({
-      rulesHash,
-      configHash,
-      lastChecked: Date.now(),
-      skipCount: 0,
-    }))
-    return { shouldSkip: false, skipCount: 0 }
-  } catch {
-    return { shouldSkip: false, skipCount: 0 }
-  }
-}
-
-// #43: Cache-lock — reset (when rules change)
-export async function resetCacheLock(): Promise<void> {
-  try {
-    await Bun.write(CACHE_LOCK_FILE, JSON.stringify({
-      rulesHash: "",
-      configHash: "",
-      lastChecked: Date.now(),
-      skipCount: 0,
-    }))
-  } catch {
-    // Silent fail
-  }
-}
-
 // Track session state for summary building
 interface SessionTracker {
   filesTouched: Set<string>
   errors: string[]
-  testResults: string[]
   gitEvents: string[]
-  decisions: string[]
   toolCalls: number
   tokensSaved: number
 }
@@ -178,9 +100,7 @@ interface SessionTracker {
 const tracker: SessionTracker = {
   filesTouched: new Set(),
   errors: [],
-  testResults: [],
   gitEvents: [],
-  decisions: [],
   toolCalls: 0,
   tokensSaved: 0,
 }
@@ -193,16 +113,8 @@ export function trackError(error: string): void {
   tracker.errors.push(error.slice(0, 200))
 }
 
-export function trackTestResult(result: string): void {
-  tracker.testResults.push(result.slice(0, 100))
-}
-
 export function trackGitEvent(event: string): void {
   tracker.gitEvents.push(event.slice(0, 100))
-}
-
-export function trackDecision(decision: string): void {
-  tracker.decisions.push(decision.slice(0, 100))
 }
 
 export function trackToolCall(): void {
@@ -217,9 +129,7 @@ export function getSessionTracker(): SessionTracker {
   return {
     filesTouched: new Set(tracker.filesTouched),
     errors: [...tracker.errors],
-    testResults: [...tracker.testResults],
     gitEvents: [...tracker.gitEvents],
-    decisions: [...tracker.decisions],
     toolCalls: tracker.toolCalls,
     tokensSaved: tracker.tokensSaved,
   }
@@ -228,9 +138,7 @@ export function getSessionTracker(): SessionTracker {
 export function resetSessionTracker(): void {
   tracker.filesTouched.clear()
   tracker.errors.length = 0
-  tracker.testResults.length = 0
   tracker.gitEvents.length = 0
-  tracker.decisions.length = 0
   tracker.toolCalls = 0
   tracker.tokensSaved = 0
 }
@@ -241,9 +149,9 @@ export async function finalizeSession(project: string): Promise<void> {
     project,
     filesTouched: [...tracker.filesTouched],
     errors: tracker.errors,
-    testResults: tracker.testResults,
+    testResults: [],
     gitEvents: tracker.gitEvents,
-    decisions: tracker.decisions,
+    decisions: [],
     toolCalls: tracker.toolCalls,
     tokensSaved: tracker.tokensSaved,
   })

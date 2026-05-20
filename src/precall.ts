@@ -165,44 +165,6 @@ export function checkEditSize(content: string): { allowed: boolean; reason?: str
   return { allowed: true }
 }
 
-// #5: Subagent budget tracking
-interface SubagentBudget {
-  maxReadBytes: number
-  maxCallCount: number
-  currentCalls: number
-  totalReadBytes: number
-}
-
-const subagentBudgets = new Map<string, SubagentBudget>()
-
-export function initSubagentBudget(agentId: string, maxReadBytes = 10 * 1024, maxCallCount = 25): void {
-  subagentBudgets.set(agentId, {
-    maxReadBytes,
-    maxCallCount,
-    currentCalls: 0,
-    totalReadBytes: 0,
-  })
-}
-
-export function checkSubagentBudget(agentId: string, tool: string, contentSize = 0): { allowed: boolean; reason?: string } {
-  const budget = subagentBudgets.get(agentId)
-  if (!budget) return { allowed: true } // No budget = unlimited (main agent)
-
-  budget.currentCalls++
-  if (budget.currentCalls > budget.maxCallCount) {
-    return { allowed: false, reason: `Subagent call limit exceeded: ${budget.currentCalls}/${budget.maxCallCount}` }
-  }
-
-  if (tool === "read") {
-    budget.totalReadBytes += contentSize
-    if (budget.totalReadBytes > budget.maxReadBytes) {
-      return { allowed: false, reason: `Subagent read budget exceeded: ${Math.round(budget.totalReadBytes / 1024)}KB/${Math.round(budget.maxReadBytes / 1024)}KB` }
-    }
-  }
-
-  return { allowed: true }
-}
-
 // Pre-call hook: intercept tool args before execution
 export function preCallFilter(tool: string, args: Record<string, unknown>): {
   blocked?: boolean

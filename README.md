@@ -1,107 +1,87 @@
 # OpenToken
 
-Token-saving companion for OpenCode. **24-layer compression pipeline** that intercepts, filters, and compresses tool outputs before they reach the model.
+Token-saving companion for OpenCode. Intercepts, filters, and compresses tool outputs before they reach the model.
 
-**Target: 70-99% token reduction on tool outputs.**
+**Typical savings: 50-90% on tool output tokens.**
 
-## Architecture
+## How It Works
 
 ```
-OpenCode tool call → [24 layers] → model sees clean output
+OpenCode tool call → [compression pipeline] → model sees clean output
 ```
 
-### The 24 Layers
+OpenToken installs as an OpenCode plugin and hooks into the tool execution lifecycle. Every tool output passes through a multi-stage pipeline that strips noise, removes redundancy, and compresses large outputs — all transparently.
 
-| # | Layer | Technique | Source | Savings |
-|---|-------|-----------|--------|---------|
-| L1 | Command rewrite | `npm install` → `npm install --silent`, 14+ patterns | rtk | 10-30% |
-| L2 | Block minified | Skip `.min.js`, `dist/`, `node_modules/` | warden | 5-15% |
-| L3 | Size caps | Block writes >100KB, edits >50KB | warden | prevents waste |
-| L4 | Subagent budget | Read byte limits, call count caps | warden | 20-40% |
-| L5 | LSP-first enforcement | Block grep for symbols, force LSP | lsp-enforcement | 80% |
-| L6 | Family filters | Bash output by family (git/npm/cargo/test/fs) | ecotokens | 60-90% |
-| L7 | Tool compression | Read outlines, grep dedup, glob noise removal | — | 50-80% |
-| L8 | Binary detect | NUL byte scan, suppress binary output | warden | 100% on binary |
-| L9 | Output block | Suppress >500KB entirely | warden | prevents overflow |
-| L10 | Strip thinking | Remove `<antThinking>`, `<reasoning>` blocks | warden | 5-20% |
-| L11 | Whitespace cleanup | Strip nulls, empties, timestamps, IDs, hashes | smithers | 10-30% |
-| L12 | Key aliasing | `description`→`desc`, `configuration`→`config` | smithers | 5-15% |
-| L13 | Cross-call dedup | Same output within 16 calls → collapse | squeez | 100% on dupes |
-| L14 | Progressive disc | >200 lines → offload to temp file + pointer | context-mode | 80-95% |
-| L15 | Auto-escalation | 50%→lean, 70%→ultra, 85%→ceiling ratchet | pith | adaptive |
-| L16 | AST skeleton | Replace full reads with symbol outlines | pith/claw | 88% |
-| L17 | Diff folding | Collapse unchanged diff context lines | claw-compactor | 15-82% |
-| L18 | Log folding | Collapse repeated log lines | claw-compactor | 15-82% |
-| L19 | JSON sampling | Schema discovery + representative sampling | claw-compactor | 82% |
-| L20 | Reversible compress | Hash store + retrieve on demand | claw-compactor | enables 82% |
-| L21 | Content router | Detect type, fire relevant stages only | claw-compactor | <50ms |
-| L22 | Think-in-code | Write scripts instead of reading files | context-mode | 200x |
-| L23 | Symbol index | `find_symbol`, `get_function_source` | token-savior | 99.9% |
-| L24 | Session memory | Prev session summary + cache-lock skip | squeez | ~300 tok |
+## Active Layers
+
+| # | Layer | What It Does |
+|---|-------|-------------|
+| L1 | Command rewrite | Adds `--silent`, `--quiet`, `--oneline` to noisy commands |
+| L2 | Block minified | Skips reads of `.min.js`, `dist/`, `node_modules/` |
+| L3 | Size caps | Blocks writes >100KB, edits >50KB |
+| L5 | LSP-first | Blocks grep/glob for code symbols, suggests LSP tools |
+| L6 | Family filters | Specialized filters for git, npm, cargo, test, and fs output |
+| L7 | Tool compression | Read outlines, grep dedup, glob noise removal |
+| L8 | Binary detect | Suppresses binary output |
+| L9 | Output block | Suppresses output >500KB |
+| L10 | Strip thinking | Removes `<antThinking>`, `<reasoning>` blocks |
+| L11 | Whitespace cleanup | Strips nulls, empty values, timestamps |
+| L12 | Key aliasing | `description`→`desc`, `configuration`→`config` |
+| L13 | Cross-call dedup | Identical output within 16 calls → single reference |
+| L14 | Progressive disclosure | Large output → offload to temp file + summary pointer |
+| L15 | Auto-escalation | Compression intensity increases as context fills |
+| L16 | AST skeleton | Replaces full file reads with symbol outlines |
+| L17 | Diff folding | Collapses unchanged diff context lines |
+| L18 | Log folding | Collapses repeated consecutive log lines |
+| L19 | JSON sampling | Large JSON arrays → schema + representative samples |
+| L20 | Reversible compression | Aggressive compression with on-disk original store |
+| L21 | Content router | Detects content type, fires only relevant stages |
+| L23 | Symbol index | Background codebase indexing at session start |
+| L24 | Session memory | Injects previous session summary on restart |
 
 ## Safety Guarantees
 
 | Rule | Behavior |
 |------|----------|
 | Short outputs | <200 lines or <50KB → pass through unchanged |
-| Errors/failures | Never modified, always preserved in full |
+| Conservative | If filtered output ≥ original size → return original |
 | Secrets | Redacted BEFORE any filtering (33+ patterns) |
-| Fallback | If filtered ≥ original → return original |
-| UTF-8 safe | Never truncate mid-character |
-| Binary | Detected and suppressed, not passed to model |
+| Binary | Detected and suppressed |
+
+## Requirements
+
+- **Bun** runtime (>=1.2.0)
+- **OpenCode** with plugin support
 
 ## Install
 
-### Global (recommended)
-
 ```bash
-git clone https://github.com/MrGray17/opentoken.git
-cd opentoken
-bun install
-
-# Copy to global opencode plugins directory
-cp -r src ~/.config/opencode/plugins/opentoken
+npm install opentoken
 ```
 
-### Per-project
-
-```bash
-cp -r src /your/project/.opencode/plugins/opentoken
-```
-
-## Configuration
-
-Create `~/.config/opentoken/config.json`:
+Then add to your OpenCode config:
 
 ```json
 {
-  "abbreviations_enabled": true,
-  "cache_enabled": true,
-  "cache_ttl_seconds": 30,
-  "max_lines_short_output": 200,
-  "max_bytes_short_output": 51200,
-  "subagent_max_read_kb": 10,
-  "subagent_max_calls": 25,
-  "write_max_kb": 100,
-  "edit_max_kb": 50,
-  "output_max_kb": 500,
-  "dedup_window": 16,
-  "offload_max_lines": 200,
-  "noise_dirs": ["node_modules", ".git", "dist", "build", ".cache"]
+  "plugins": {
+    "opentoken": {
+      "path": "node_modules/opentoken/src/index.ts"
+    }
+  }
 }
 ```
 
-## Metrics
+## Data Storage
 
-Token savings tracked in `~/.config/opentoken/metrics.jsonl`:
+All state is stored in `~/.config/opentoken/`:
 
-```json
-{"ts":"2026-05-19T...","tool":"bash","family":"git","before_tokens":12000,"after_tokens":800,"saved_pct":93}
-```
-
-## Roadmap
-
-See [TO-DO.md](TO-DO.md) for Phase 3 (advanced) techniques.
+| File | Purpose | Cleanup |
+|------|---------|---------|
+| `metrics.jsonl` | Per-call token savings | Append-only (grows over time) |
+| `session-memory.json` | Previous session summary | Overwritten each session |
+| `offload/` | Progressive disclosure temp files | Auto-cleaned after 1 hour |
+| `rewind/` | Reversible compression store | Auto-cleaned after 1 hour |
+| `index/symbols.json` | Symbol index cache | Overwritten each session |
 
 ## License
 

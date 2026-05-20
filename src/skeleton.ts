@@ -257,7 +257,7 @@ function detectLanguage(filePath: string): string | null {
 // Extract skeleton using regex patterns
 function extractSkeletonRegex(content: string, language: string): string {
   const config = PATTERN_LOOKUP[language]
-  if (!config) return null
+  if (!config) return ""
 
   const lines = content.split("\n")
   const skeletonLines: { lineNum: number; text: string }[] = []
@@ -301,6 +301,7 @@ function extractSkeletonRegex(content: string, language: string): string {
 async function extractSkeletonTreeSitter(content: string, language: string): Promise<string | null> {
   try {
     // Try to load tree-sitter dynamically
+    // @ts-expect-error optional dependency, may not be installed
     const Parser = await import("web-tree-sitter")
     // This would require WASM loading, which is complex
     // For now, fall back to regex
@@ -320,36 +321,4 @@ export async function extractSkeleton(filePath: string, content: string): Promis
   if (tsSkeleton) return tsSkeleton
 
   return extractSkeletonRegex(content, language)
-}
-
-// Get skeleton for a specific line range
-export function getSkeletonSection(content: string, language: string, startLine: number, endLine: number): string {
-  const config = PATTERN_LOOKUP[language]
-  if (!config) return content
-
-  const lines = content.split("\n")
-  const section = lines.slice(startLine - 1, endLine).join("\n")
-
-  // Extract symbols from this section
-  const symbols: string[] = []
-  for (const pattern of config.patterns) {
-    pattern.lastIndex = 0
-    let match
-    while ((match = pattern.exec(section)) !== null) {
-      symbols.push(match[0].trim())
-    }
-  }
-
-  if (symbols.length === 0) return section
-
-  return `// Lines ${startLine}-${endLine}\n${symbols.join("\n")}`
-}
-
-// Clear skeleton cache
-export async function clearSkeletonCache(): Promise<void> {
-  try {
-    await Bun.$([`rm -rf ${SKELETON_CACHE_DIR}`]).quiet()
-  } catch {
-    // Ignore
-  }
 }

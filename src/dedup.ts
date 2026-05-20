@@ -66,7 +66,7 @@ function recordCall(content: string, tool: string): void {
   callCounter++
   const entry: DedupEntry = {
     hash: hashContent(content),
-    content: content.slice(0, 200), // Store first 200 chars for reference
+    content: content, // Store full content for accurate dedup
     tool,
     callNumber: callCounter,
     timestamp: Date.now(),
@@ -102,12 +102,4 @@ export function deduplicate(content: string, tool: string): { result: string; de
 export function resetDedup(): void {
   recentCalls.length = 0
   callCounter = 0
-}
-
-// Get dedup stats
-export function getDedupStats(): { totalCalls: number; windowSize: number } {
-  return {
-    totalCalls: callCounter,
-    windowSize: recentCalls.length,
-  }
 }

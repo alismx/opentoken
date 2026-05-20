@@ -1,0 +1,8 @@
+Bugs.md
+TO-DO.md
+AGENTS.md
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.cache/

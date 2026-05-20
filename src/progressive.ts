@@ -26,7 +26,8 @@ async function ensureDir(): Promise<void> {
   try {
     const dirExists = await Bun.file(OFFLOAD_DIR).exists()
     if (!dirExists) {
-      await Bun.$([`mkdir -p ${OFFLOAD_DIR}`]).quiet()
+      const proc = Bun.spawn(["mkdir", "-p", OFFLOAD_DIR])
+      await proc.exited
     }
   } catch {
     // Ignore
@@ -121,18 +122,6 @@ export async function progressiveDisclosure(content: string, tool: string): Prom
   }
 }
 
-// Fetch offloaded content by ID
-export async function fetchOffloaded(id: string): Promise<string | null> {
-  const entry = offloadStore.get(id)
-  if (!entry) return null
-
-  try {
-    return await Bun.file(entry.filePath).text()
-  } catch {
-    return null
-  }
-}
-
 // Clean up old offloaded files (older than 1 hour)
 export async function cleanupOffloaded(maxAgeMs = 3600000): Promise<number> {
   let cleaned = 0
@@ -141,7 +130,10 @@ export async function cleanupOffloaded(maxAgeMs = 3600000): Promise<number> {
   for (const [id, entry] of offloadStore.entries()) {
     if (now - entry.timestamp > maxAgeMs) {
       try {
-        await Bun.file(entry.filePath).exists() && await Bun.$([`rm -f ${entry.filePath}`]).quiet()
+        if (await Bun.file(entry.filePath).exists()) {
+          const proc = Bun.spawn(["rm", "-f", entry.filePath])
+          await proc.exited
+        }
       } catch {
         // Ignore
       }
@@ -151,13 +143,4 @@ export async function cleanupOffloaded(maxAgeMs = 3600000): Promise<number> {
   }
 
   return cleaned
-}
-
-// Get offload stats
-export function getOffloadStats(): { total: number; totalBytes: number } {
-  let totalBytes = 0
-  for (const entry of offloadStore.values()) {
-    totalBytes += entry.fullSize
-  }
-  return { total: offloadStore.size, totalBytes }
 }

@@ -20,38 +20,6 @@ function generateScriptId(): string {
   return crypto.createHash("md5").update(`${Date.now()}-${Math.random()}`).digest("hex").slice(0, 8)
 }
 
-// Create a sandbox script for file analysis
-export function createAnalysisScript(
-  language: "bash" | "python" | "node" | "rust" | "go",
-  task: string,
-  files: string[],
-): { script: string; scriptPath: string } {
-  const id = generateScriptId()
-  const ext = getExtension(language)
-  const scriptPath = path.join(SANDBOX_DIR, `analysis-${id}${ext}`)
-
-  let script = ""
-  switch (language) {
-    case "bash":
-      script = createBashScript(task, files)
-      break
-    case "python":
-      script = createPythonScript(task, files)
-      break
-    case "node":
-      script = createNodeScript(task, files)
-      break
-    case "rust":
-      script = createRustScript(task, files)
-      break
-    case "go":
-      script = createGoScript(task, files)
-      break
-  }
-
-  return { script, scriptPath }
-}
-
 // Execute sandbox script
 export async function executeSandbox(scriptPath: string, language: string): Promise<SandboxResult> {
   await ensureDir()
@@ -62,10 +30,10 @@ export async function executeSandbox(scriptPath: string, language: string): Prom
   let exitCode = 0
 
   try {
-    const cmd = getRunCommand(language, scriptPath)
-    const result = await Bun.$([cmd]).quiet()
-    stdout = result.stdout?.toString() || ""
-    stderr = result.stderr?.toString() || ""
+    const args = getRunCommand(language, scriptPath)
+    const result = await Bun.spawn(args)
+    stdout = (await new Response(result.stdout).text()) || ""
+    stderr = (await new Response(result.stderr).text()) || ""
     exitCode = result.exitCode || 0
   } catch (error: any) {
     stderr = error.message || "Execution failed"
@@ -126,7 +94,7 @@ function createCountScript(files: string[], countClasses: boolean): {
   const script = `#!/bin/bash
 # Count ${target} in files
 total=0
-for file in ${files.join(" ")}; do
+for file in ${files.map((f) => `"${f}"`).join(" ")}; do
   if [ -f "$file" ]; then
     count=$(grep -cE "${pattern}" "$file" 2>/dev/null || echo 0)
     echo "$file: $count ${target}"
@@ -147,7 +115,7 @@ function createImportScript(files: string[]): {
 } {
   const script = `#!/bin/bash
 # Extract imports from files
-for file in ${files.join(" ")}; do
+for file in ${files.map((f) => `"${f}"`).join(" ")}; do
   if [ -f "$file" ]; then
     echo "=== $file ==="
     grep -E "^(import|from|require|#include|use)" "$file" 2>/dev/null || echo "(no imports)"
@@ -166,7 +134,7 @@ function createTodoScript(files: string[]): {
 } {
   const script = `#!/bin/bash
 # Find TODOs/FIXMEs in files
-for file in ${files.join(" ")}; do
+for file in ${files.map((f) => `"${f}"`).join(" ")}; do
   if [ -f "$file" ]; then
     matches=$(grep -nE "(TODO|FIXME|HACK|XXX)" "$file" 2>/dev/null)
     if [ -n "$matches" ]; then
@@ -188,7 +156,7 @@ function createErrorScript(files: string[]): {
 } {
   const script = `#!/bin/bash
 # Find error patterns in files
-for file in ${files.join(" ")}; do
+for file in ${files.map((f) => `"${f}"`).join(" ")}; do
   if [ -f "$file" ]; then
     matches=$(grep -nE "(error|panic|fatal|throw|catch|except)" "$file" 2>/dev/null)
     if [ -n "$matches" ]; then
@@ -210,7 +178,7 @@ function createComplexityScript(files: string[]): {
 } {
   const script = `#!/bin/bash
 # Analyze code complexity (lines per function)
-for file in ${files.join(" ")}; do
+for file in ${files.map((f) => `"${f}"`).join(" ")}; do
   if [ -f "$file" ]; then
     echo "=== $file ==="
     echo "Lines: $(wc -l < "$file")"
@@ -230,7 +198,7 @@ function createGenericAnalysisScript(files: string[]): {
 } {
   const script = `#!/bin/bash
 # Generic file analysis
-for file in ${files.join(" ")}; do
+for file in ${files.map((f) => `"${f}"`).join(" ")}; do
   if [ -f "$file" ]; then
     echo "=== $file ==="
     echo "Lines: $(wc -l < "$file")"
@@ -255,18 +223,18 @@ function getExtension(language: string): string {
   }
 }
 
-function getRunCommand(language: string, scriptPath: string): string {
+function getRunCommand(language: string, scriptPath: string): string[] {
   switch (language) {
-    case "python": return `python3 ${scriptPath}`
-    case "node": return `node ${scriptPath}`
-    case "rust": return `rustc ${scriptPath} -o ${scriptPath}.out && ${scriptPath}.out`
-    case "go": return `go run ${scriptPath}`
-    default: return `bash ${scriptPath}`
+    case "python": return ["python3", scriptPath]
+    case "node": return ["node", scriptPath]
+    case "rust": return ["bash", "-c", `rustc "${scriptPath}" -o "${scriptPath}.out" && "${scriptPath}.out"`]
+    case "go": return ["go", "run", scriptPath]
+    default: return ["bash", scriptPath]
   }
 }
 
 function createBashScript(task: string, files: string[]): string {
-  return `#!/bin/bash\n# ${task}\nfor file in ${files.join(" ")}; do\n  [ -f "$file" ] && echo "=== $file ===" && cat "$file"\ndone\n`
+  return `#!/bin/bash\n# ${task}\nfor file in ${files.map((f) => `"${f}"`).join(" ")}; do\n  [ -f "$file" ] && echo "=== $file ===" && cat "$file"\ndone\n`
 }
 
 function createPythonScript(task: string, files: string[]): string {
@@ -291,7 +259,8 @@ async function ensureDir(): Promise<void> {
   try {
     const dirExists = await Bun.file(SANDBOX_DIR).exists()
     if (!dirExists) {
-      await Bun.$([`mkdir -p ${SANDBOX_DIR}`]).quiet()
+      const proc = Bun.spawn(["mkdir", "-p", SANDBOX_DIR])
+      await proc.exited
     }
   } catch {
     // Ignore

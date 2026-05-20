@@ -53,6 +53,6 @@ export async function setCachedRead(filePath: string, content: string): Promise<
   }
 }
 
-export function clearCache(): void {
+function clearCache(): void {
   cache.clear()
 }
