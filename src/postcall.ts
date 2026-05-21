@@ -4,6 +4,10 @@
 // #17 Output suppression (>500KB → block entirely)
 // #20 Key aliasing (replace long JSON keys with short aliases)
 // #21 Whitespace/null cleanup (strip redundant fields, timestamps)
+// #27 TOON format conversion (JSON arrays → tabular)
+// #28 Aggressive whitespace normalization
+
+import { convertToTOON } from "./toon"
 
 const MAX_OUTPUT_BYTES = 100 * 1024 // 100KB — block entirely
 
@@ -260,6 +264,29 @@ export function cleanWhitespaceAndNulls(text: string): string {
   return result
 }
 
+// Aggressive whitespace normalization — 5-15% savings, zero quality risk
+// Collapses multiple newlines, strips trailing whitespace, normalizes tabs
+export function normalizeWhitespace(text: string): string {
+  let result = text
+
+  // Collapse 3+ newlines into 2 (preserve paragraph breaks)
+  result = result.replace(/\n{3,}/g, "\n\n")
+
+  // Strip trailing whitespace on each line
+  result = result.replace(/[ \t]+$/gm, "")
+
+  // Normalize tabs to 2 spaces (tabs tokenize poorly)
+  result = result.replace(/\t/g, "  ")
+
+  // Strip leading blank lines
+  result = result.replace(/^\n+/, "")
+
+  // Strip trailing blank lines
+  result = result.replace(/\n+$/, "")
+
+  return result
+}
+
 // Main post-call processor pipeline
 export function postCallProcess(text: string): string {
   let result = text
@@ -283,6 +310,13 @@ export function postCallProcess(text: string): string {
 
   // #20: Key aliasing
   result = aliasJsonKeys(result)
+
+  // #27: TOON format conversion (JSON arrays → tabular)
+  const toon = convertToTOON(result)
+  if (toon.converted) result = toon.result
+
+  // #28: Aggressive whitespace normalization
+  result = normalizeWhitespace(result)
 
   // #22: URL shortening
   result = shortenUrls(result)

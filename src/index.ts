@@ -9,7 +9,8 @@ import fs from "fs"
 
 // Phase 1 imports
 import { preCallFilter } from "./precall"
-import { stripThinkingBlocks, detectAndHandleBinary, suppressOversized, aliasJsonKeys, cleanWhitespaceAndNulls, shortenUrls, stripBase64Content } from "./postcall"
+import { stripThinkingBlocks, detectAndHandleBinary, suppressOversized, aliasJsonKeys, cleanWhitespaceAndNulls, shortenUrls, stripBase64Content, normalizeWhitespace } from "./postcall"
+import { convertToTOON } from "./toon"
 import { deduplicate, resetDedup } from "./dedup"
 import { progressiveDisclosure, cleanupOffloaded } from "./progressive"
 import { applyAutoEscalation, deescalate, updateContext, getCompressionLevel, resetEscalation, resetContextUsed } from "./autoescalate"
@@ -274,6 +275,13 @@ async function applyBashFilter(sessionID: string, command: string, output: strin
 
   output = safeStage("aliasJsonKeys", () => aliasJsonKeys(output), output)
 
+  // TOON format conversion for JSON arrays
+  const toon = safeStage("convertToTOON", () => convertToTOON(output), { converted: false, result: output })
+  if (toon.converted) output = toon.result
+
+  // Aggressive whitespace normalization
+  output = safeStage("normalizeWhitespace", () => normalizeWhitespace(output), output)
+
   const { pipeline } = routeContent(output)
 
   if (pipeline.includes("diff-fold") || pipeline.includes("log-fold")) {
@@ -358,6 +366,13 @@ async function applyReadFilter(sessionID: string, filePath: string, content: str
 
   content = safeStage("aliasJsonKeys", () => aliasJsonKeys(content), content)
 
+  // TOON format conversion for JSON arrays
+  const toon = safeStage("convertToTOON", () => convertToTOON(content), { converted: false, result: content })
+  if (toon.converted) content = toon.result
+
+  // Aggressive whitespace normalization
+  content = safeStage("normalizeWhitespace", () => normalizeWhitespace(content), content)
+
   const { pipeline } = routeContent(content, filePath)
 
   if (pipeline.includes("skeleton") && content.split("\n").length > 50) {
@@ -405,6 +420,9 @@ async function applyGrepFilter(sessionID: string, output: string): Promise<strin
   if (shouldSkipFilter(output)) return output
 
   output = safeStage("cleanWhitespaceAndNulls", () => cleanWhitespaceAndNulls(output), output)
+
+  // Aggressive whitespace normalization
+  output = safeStage("normalizeWhitespace", () => normalizeWhitespace(output), output)
 
   let filtered = safeStage("filterGrep", () => filterGrep(output), output)
 

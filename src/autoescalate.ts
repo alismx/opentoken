@@ -182,9 +182,57 @@ function applyLeanCompression(text: string): string {
   return result
 }
 
-// ULTRA: Abbreviate, arrows, tables
+// Remove low-information sentences using simple heuristics
+// Sentences with no named entities, no numbers, no code references = low value
+function removeLowInfoSentences(text: string): string {
+  const sentences = text.split(/(?<=[.!?])\s+/)
+  const kept: string[] = []
+
+  for (const sentence of sentences) {
+    // Keep short sentences (likely important)
+    if (sentence.split(/\s+/).length <= 8) {
+      kept.push(sentence)
+      continue
+    }
+
+    // Keep sentences with numbers (data, metrics, versions)
+    if (/\d/.test(sentence)) {
+      kept.push(sentence)
+      continue
+    }
+
+    // Keep sentences with code references (backticks, paths, symbols)
+    if (/[`\/\\@#$%^&*(){}[\]|<>]/.test(sentence)) {
+      kept.push(sentence)
+      continue
+    }
+
+    // Keep sentences with named entities (capitalized words, proper nouns)
+    if (/[A-Z][a-z]{2,}/.test(sentence)) {
+      kept.push(sentence)
+      continue
+    }
+
+    // Keep sentences with URLs or emails
+    if (/[a-z]+:\/\//.test(sentence) || /\S+@\S+/.test(sentence)) {
+      kept.push(sentence)
+      continue
+    }
+
+    // Remove: filler sentences with no signal
+    // e.g., "This is a common pattern that developers use."
+    // e.g., "The function works as expected in most cases."
+  }
+
+  return kept.join(" ")
+}
+
+// ULTRA: Abbreviate, arrows, tables + semantic sentence removal
 function applyUltraCompression(text: string): string {
   let result = applyLeanCompression(text)
+
+  // Remove low-information sentences (no entities, no numbers, no code refs)
+  result = removeLowInfoSentences(result)
 
   // Protect code lines: don't apply ULTRA phrase replacements to lines that look like code
   const lines = result.split("\n")
