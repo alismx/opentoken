@@ -5,6 +5,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
 import path from "path"
 import os from "os"
+import fs from "fs"
 
 // Phase 1 imports
 import { preCallFilter } from "./precall"
@@ -50,6 +51,10 @@ import { indexDirectory, loadIndex } from "./symbolindex"
 import { shouldBlockGrep, shouldBlockGlob, shouldBlockShellGrep, trackLSPUsage, resetLSPState } from "./lspfirst"
 import { generateStatusLine, generateSessionSummary, resetStatusLine } from "./statusline"
 
+// Phase 7 imports — history compression & session memory
+import { compressMessagesInPlace } from "./history"
+import { writeSessionSummary, getRelevantSummaries, buildMemoryPrompt, extractContextKeywords, getMemoryStats } from "./memory"
+
 // ─── CONFIGURATION ───
 
 interface OpenTokenConfig {
@@ -59,6 +64,10 @@ interface OpenTokenConfig {
   enableMetrics: boolean       // Track token savings to disk
   enableSymbolIndex: boolean   // Build and query symbol index at startup
   conservativeUseTokens: boolean // Use token count (slower) vs byte count (faster) for safety check
+  // Phase 7 — history compression
+  enableHistoryCompression: boolean // Kill switch for experimental hooks (default false)
+  historyCompressionWindow: number  // Messages to keep full-fidelity (default 12)
+  enableSessionMemory: boolean      // Cross-session memory persistence (default false)
 }
 
 const DEFAULT_CONFIG: OpenTokenConfig = {
@@ -68,6 +77,9 @@ const DEFAULT_CONFIG: OpenTokenConfig = {
   enableMetrics: true,
   enableSymbolIndex: true,
   conservativeUseTokens: false,       // Byte count by default (fast)
+  enableHistoryCompression: false,    // Kill switch — opt-in for experimental hooks
+  historyCompressionWindow: 12,       // Keep last 12 messages full-fidelity
+  enableSessionMemory: false,         // Cross-session memory persistence
 }
 
 let config: OpenTokenConfig = DEFAULT_CONFIG
@@ -437,6 +449,8 @@ async function applyGlobFilter(output: string): Promise<string> {
 
 // ─── MAIN PLUGIN ───
 
+const SESSION_START_FILE = path.join(os.homedir(), ".config", "opentoken", "session-start.json")
+
 export const OpenTokenPlugin: Plugin = async ({ directory }) => {
   console.error("[OpenToken] Plugin loading...")
   await loadConfig(directory)
@@ -449,10 +463,22 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
     await safeStageAsync("loadIndex", () => loadIndex(), false)
   }
 
+  // Write fresh session-start.json on every plugin load
+  try {
+    const tmp = SESSION_START_FILE + ".tmp"
+    await Bun.write(tmp, JSON.stringify({ sessionStart: Date.now() }))
+    fs.renameSync(tmp, SESSION_START_FILE)
+  } catch { /* ignore */ }
+
   return {
     // Session start — inject memory, reset state
     "session.created": async () => {
       console.error("[OpenToken] Session started — compression active")
+      try {
+        const tmp = SESSION_START_FILE + ".tmp"
+        await Bun.write(tmp, JSON.stringify({ sessionStart: Date.now() }))
+        fs.renameSync(tmp, SESSION_START_FILE)
+      } catch { /* ignore */ }
       resetDedup()
       resetEscalation()
       resetLSPState(directory)
@@ -599,11 +625,24 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
             await safeStageAsync("saveStatsSummary", () => saveStatsSummary(), undefined)
           }
 
-          await safeStageAsync("writeSessionState", () => writeSessionState(directory), undefined)
-
           // Record metrics (don't inject status line into LLM output — TUI bar handles display)
           const sessionTracker = getSessionTracker()
         }
+
+        // Ensure session-start.json exists (fallback if session.created didn't fire)
+        // Must run outside if (saved > 0) so it works even when first calls save nothing
+        const startFile = path.join(os.homedir(), ".config", "opentoken", "session-start.json")
+        try {
+          const f = Bun.file(startFile)
+          if (!(await f.exists())) {
+            const tmp = startFile + ".tmp"
+            await Bun.write(tmp, JSON.stringify({ sessionStart: Date.now() }))
+            fs.renameSync(tmp, startFile)
+          }
+        } catch { /* ignore */ }
+
+        // Write session state after every call so TUI gets fresh compression level
+        await safeStageAsync("writeSessionState", () => writeSessionState(directory, getCompressionLevel()), undefined)
 
         output.output = filtered
 
@@ -668,6 +707,77 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
           }
         },
       }),
+    },
+
+    // ─── PHASE 7: EXPERIMENTAL HOOKS ───
+    // Kill switch: all disabled if enableHistoryCompression is false
+
+    // Compress conversation messages before sending to LLM
+    // MUST mutate in-place via splice (output.messages = newArray is a silent no-op)
+    "experimental.chat.messages.transform": async (_input, output) => {
+      if (!config.enableHistoryCompression) return
+
+      try {
+        compressMessagesInPlace(output.messages, {
+          window: config.historyCompressionWindow,
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[OpenToken] chat.messages.transform error: ${msg}`)
+      }
+    },
+
+    // Customize compaction prompt + write session memory
+    "experimental.session.compacting": async (input, output) => {
+      if (!config.enableHistoryCompression) return
+
+      try {
+        // Generate session summary from metrics
+        const tracker = getSessionTracker()
+        const summary = generateSessionSummary(tracker.tokensSaved, tracker.toolCalls)
+        if (summary) {
+          // Inject into compaction context
+          output.context.push(`\n## OpenToken Session Summary\n${summary}`)
+
+          // Write to cross-session memory
+          if (config.enableSessionMemory) {
+            writeSessionSummary(input.sessionID, directory, summary)
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[OpenToken] session.compacting error: ${msg}`)
+      }
+    },
+
+    // Inject session memory into system prompt
+    "experimental.chat.system.transform": async (input, output) => {
+      if (!config.enableHistoryCompression) return
+
+      try {
+        // Inject session memory if enabled
+        if (config.enableSessionMemory) {
+          const stats = getMemoryStats()
+          if (stats.total > 0) {
+            // Extract keywords from the latest user message
+            const latestUserMsg = input as any
+            const keywords = latestUserMsg?.message?.content
+              ? extractContextKeywords(latestUserMsg.message.content)
+              : []
+
+            const relevant = getRelevantSummaries(directory, keywords, 3)
+            if (relevant.length > 0) {
+              const memoryPrompt = buildMemoryPrompt(relevant)
+              if (memoryPrompt) {
+                output.system.push(memoryPrompt)
+              }
+            }
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[OpenToken] chat.system.transform error: ${msg}`)
+      }
     },
   }
 }

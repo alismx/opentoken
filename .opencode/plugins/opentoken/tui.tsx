@@ -8,6 +8,7 @@ import os from "os"
 
 const METRICS_DIR = path.join(os.homedir(), ".config", "opentoken")
 const METRICS_FILE = path.join(METRICS_DIR, "metrics.jsonl")
+const SESSION_START_FILE = path.join(METRICS_DIR, "session-start.json")
 
 function formatTokens(n: number): string {
   if (n < 1000) return `${n}`
@@ -39,20 +40,32 @@ interface StatusBarState {
 // Read metrics.jsonl directly — always fresh, updated after every tool call
 async function readSessionMetrics(): Promise<{ tokensSaved: number; toolCalls: number } | null> {
   try {
+    // Read session start timestamp
+    let sessionStart = 0
+    try {
+      const startFile = Bun.file(SESSION_START_FILE)
+      if (await startFile.exists()) {
+        const data = JSON.parse(await startFile.text())
+        sessionStart = data.sessionStart || 0
+      }
+    } catch { /* ignore */ }
+
     const file = Bun.file(METRICS_FILE)
     if (!(await file.exists())) return null
     const text = await file.text()
     const lines = text.trim().split("\n").filter((l) => l.trim())
-    // Read last 50 entries to cover the current session
-    const recent = lines.slice(-50)
     let totalSaved = 0
     let totalCalls = 0
-    for (const line of recent) {
+    for (const line of lines) {
       try {
         const entry = JSON.parse(line)
+        if (sessionStart > 0 && entry.ts) {
+          const entryTime = new Date(entry.ts).getTime()
+          if (entryTime < sessionStart) continue
+        }
         totalSaved += (entry.before_tokens || 0) - (entry.after_tokens || 0)
         totalCalls++
-      } catch { /* skip malformed lines */ }
+      } catch { /* skip */ }
     }
     return { tokensSaved: Math.max(0, totalSaved), toolCalls: totalCalls }
   } catch {
@@ -61,7 +74,7 @@ async function readSessionMetrics(): Promise<{ tokensSaved: number; toolCalls: n
 }
 
 
-function StatusBarWidget(props: { theme: TuiTheme; getMetrics: () => { isStreaming: boolean; isComplete: boolean } | null }) {
+function StatusBarWidget(props: { theme: TuiTheme; getMetrics: () => { isStreaming: boolean; isComplete: boolean } | null; api?: any }) {
   const [time, setTime] = createSignal(formatTime(new Date()))
   const [state, setState] = createSignal<StatusBarState>({
     tokensSaved: 0,
@@ -93,6 +106,16 @@ function StatusBarWidget(props: { theme: TuiTheme; getMetrics: () => { isStreami
 
     loadMetrics()
     metricsInterval = setInterval(loadMetrics, 3000)
+
+    // Listen to session events inside widget where setState is accessible
+    if (props.api?.event) {
+      props.api.event.on("session.created", () => {
+        setState((prev) => ({ ...prev, sessionStart: Date.now(), tokensSaved: 0, toolCalls: 0 }))
+      })
+      props.api.event.on("session.deleted", () => {
+        setState((prev) => ({ ...prev, sessionStart: null, tokensSaved: 0, toolCalls: 0 }))
+      })
+    }
   })
 
   onCleanup(() => {
@@ -124,11 +147,8 @@ function StatusBarWidget(props: { theme: TuiTheme; getMetrics: () => { isStreami
 }
 
 const plugin: TuiPlugin = async (api, _options, _meta) => {
-  // Track session state for event-driven updates
-  const [sessionStart, setSessionStart] = createSignal<number | null>(null)
   const [isStreaming, setIsStreaming] = createSignal(false)
 
-  // Listen to session events for instant updates
   api.event.on("session.status", (event: Extract<Event, { type: "session.status" }>) => {
     const status = event.properties.status
     if (status?.type === "busy") {
@@ -136,14 +156,6 @@ const plugin: TuiPlugin = async (api, _options, _meta) => {
     } else if (status?.type === "idle") {
       setIsStreaming(false)
     }
-  })
-
-  api.event.on("session.created", () => {
-    setSessionStart(Date.now())
-  })
-
-  api.event.on("session.deleted", () => {
-    setSessionStart(null)
   })
 
   // Use session_prompt_right slot — proven by opencodeBar reference plugin
@@ -155,6 +167,7 @@ const plugin: TuiPlugin = async (api, _options, _meta) => {
         return (
           <StatusBarWidget
             theme={ctx.theme}
+            api={api}
             getMetrics={() => ({ isStreaming: isStreaming(), isComplete: false })}
           />
         )

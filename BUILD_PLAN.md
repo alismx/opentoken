@@ -98,6 +98,23 @@ Two interception layers:
 - [ ] Config options — enable/disable individual filters, adjust thresholds
 - [ ] README with install instructions + benchmarks
 
+### Phase 7: History Compression + Session Memory ✅ DONE
+- [x] `src/history.ts` — Conversation message compression
+  - Sliding window (default 12 messages, configurable)
+  - Tool result summarization (read → symbols, bash → test status)
+  - Reasoning block compression
+  - Consecutive tool result collapsing
+  - Compaction detection (skip during native compaction)
+  - Kill switch (`enableHistoryCompression: false` default)
+- [x] `src/memory.ts` — Cross-session memory store
+  - JSONL persistence with keyword-based relevance scoring
+  - Project path matching + recency bonus
+  - 24-hour staleness check, LRU pruning (max 100 entries)
+  - Kill switch (`enableSessionMemory: false` default)
+- [x] `experimental.chat.messages.transform` — In-place splice mutation
+- [x] `experimental.session.compacting` — Inject summary + write memory
+- [x] `experimental.chat.system.transform` — Inject session memory
+
 ## Safety Guarantees
 
 | Rule | Behavior |
@@ -120,6 +137,8 @@ Two interception layers:
 | Read results | 60-80% |
 | Grep results | 70%+ |
 | Glob results | 50%+ |
+| History compression | 15-25% (on top of existing) |
+| Session memory injection | ~300 tokens/session |
 
 ## Tech Stack
 
@@ -148,6 +167,8 @@ opentoken/
 │   │   ├── test.ts           ← Pytest/Jest/Mocha filter
 │   │   ├── fs.ts             ← ls/find/tree filter
 │   │   └── generic.ts        ← Fallback filter
+│   ├── history.ts            ← Conversation history compression (Phase 7)
+│   ├── memory.ts             ← Cross-session memory store (Phase 7)
 │   └── utils/
 │       ├── tokens.ts         ← Token counting
 │       ├── secrets.ts        ← Secret redaction

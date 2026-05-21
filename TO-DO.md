@@ -28,6 +28,34 @@
 - [x] #1 Structural Symbol Index (find_symbol, get_function_source) — `symbolindex.ts`
 - [x] #5 LSP-First Enforcement (block grep for symbols) — `lspfirst.ts`
 
+## Phase 9: Status Bar Fix + Always-Max Compression (Planned)
+- [ ] **Status bar format** — new format: `🌸 opentoken {emoji} saved {tokens} tokens   {duration}  {time}`
+  - [ ] Remove `{calls} calls` from display
+  - [ ] Example: `🌸 opentoken ⚡ saved 2.4K tokens   1h 23m  14:32`
+- [ ] **Session-specific counts** — TUI reads `session-start.json` + filters `metrics.jsonl` by session timestamp
+  - [ ] Already partially working in installed TUI (`.opencode/plugins/opentoken/tui.tsx`)
+  - [ ] Source TUI (`src/tui.tsx`) needs same session isolation
+- [ ] **Compute compression level from real metrics** — `readSessionMetrics()` returns `{ tokensSaved, avgSavedPct }`
+  - [ ] Map `avgSavedPct` to emoji: ≥85% 🔥 ceiling, ≥70% ⚡ ultra, ≥50% 🍃 lean, <50% 💤 off
+  - [ ] Currently hardcoded to `"off"` in installed TUI — never updated from actual data
+- [ ] **Always-max compression (no content loss)** — set `computeLevel()` to always return `"ultra"`
+  - [ ] `ultra` preserves 100% of content — rewrites text, never truncates
+  - [ ] `ceiling` truncates (first 10 + last 5 lines) — loses middle content, NOT acceptable
+  - [ ] `ultra` includes: lean (filler removal + synonym shortening) + phrase→symbol replacements + list compression
+  - [ ] Code lines protected from phrase replacement
+  - [ ] `deescalate()` → no-op, never step down from ultra
+- [ ] **Files to modify:**
+  - [ ] `src/autoescalate.ts` — `computeLevel()` → always `"ultra"`, `deescalate()` → no-op
+  - [ ] `.opencode/plugins/opentoken/autoescalate.ts` — same changes (installed plugin)
+  - [ ] `.opencode/plugins/opentoken/tui.tsx` — status bar format, session metrics, compression level from data
+  - [ ] `src/tui.tsx` — mirror installed TUI changes
+  - [ ] `src/statusline.ts` — always use ⚡ emoji
+- [ ] **Tradeoff analysis:**
+  - `ultra` rewrites natural language aggressively (filler words → removed, "utilize" → "use", "leads to" → "→")
+  - Code is fully protected (import/const/function lines untouched)
+  - No information lost — output is denser but fully readable
+  - Estimated savings: 15-30% on natural language text, 0% on code
+
 ## Phase 3: Production Fixes & Polish ✅ DONE
 - [x] install.sh — add `bun install` / `npm install` for dependencies
 - [x] install.sh — fix sed double-prefix bug on re-install
@@ -87,9 +115,27 @@
 - [x] Status bar reads from stats-summary.json (written by saveStatsSummary)
 - [x] Status bar uses event-driven updates + 5s polling fallback
 
-## Phase 7: Advanced (Future)
+## Phase 7: Advanced — History Compression ✅ DONE
+- [x] #49 History compression (compress conversation history) — `history.ts`
+  - [x] Sliding window (default 12 messages, configurable)
+  - [x] Tool result summarization (read → symbols, bash → test/build status)
+  - [x] Reasoning block compression
+  - [x] Consecutive tool result collapsing
+  - [x] Compaction detection (skip during native compaction)
+  - [x] Kill switch (`enableHistoryCompression: false` default)
+- [x] `experimental.chat.messages.transform` hook — in-place splice mutation
+- [x] `experimental.session.compacting` hook — inject summary + write memory
+- [x] `experimental.chat.system.transform` hook — inject session memory
+- [x] #27 Persistent memory (keyword-based relevance scoring) — `memory.ts`
+  - [x] JSONL session memory store
+  - [x] Keyword extraction + relevance scoring
+  - [x] Project path matching + recency bonus
+  - [x] 24-hour staleness check
+  - [x] LRU pruning (max 100 entries)
+  - [x] Kill switch (`enableSessionMemory: false` default)
+
+## Phase 8: Advanced (Future)
 - [ ] #24 Semantic caching (vector similarity for read-only tool results)
-- [ ] #27 Persistent memory (SQLite + FTS5 + vector embeddings)
 - [ ] #29 Impact analysis (change impact, backward slicing)
 - [ ] #30 BM25 + semantic search hybrid (tantivy + candle embeddings)
 - [ ] #31 TextRank compression (graph-based sentence scoring)
@@ -99,7 +145,6 @@
 - [ ] #46 Reversible compression (14-stage fusion pipeline)
 - [ ] #47 Intelligent content routing (route by file type with ML classifier)
 - [ ] #48 Tool pruning (remove unused tools from context)
-- [ ] #49 History compression (compress conversation history)
 - [ ] #50 Declarative YAML filters (config-driven rules engine)
 
 ## Architecture Notes
