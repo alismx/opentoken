@@ -261,31 +261,3 @@ export function cleanWhitespaceAndNulls(text: string): string {
 }
 
 // Main post-call processor pipeline
-export function postCallProcess(text: string): string {
-  let result = text
-
-  // #17: Block entirely if too large
-  const suppressed = suppressOversized(result)
-  if (suppressed.suppressed) return suppressed.result
-
-  // #16: Binary detection
-  const binary = detectAndHandleBinary(result)
-  if (binary.binary) return binary.result
-
-  // #15: Strip thinking blocks
-  result = stripThinkingBlocks(result)
-
-  // #23: Strip base64 inline content (before other processing)
-  result = stripBase64Content(result)
-
-  // #21: Whitespace/null cleanup (before key aliasing)
-  result = cleanWhitespaceAndNulls(result)
-
-  // #20: Key aliasing
-  result = aliasJsonKeys(result)
-
-  // #22: URL shortening
-  result = shortenUrls(result)
-
-  return result
-}

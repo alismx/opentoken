@@ -10,7 +10,7 @@ const TEST_SESSION = "test-session"
 
 // Phase 1 imports
 import { preCallFilter, rewriteCommand, isMinifiedOrGenerated } from "../src/precall"
-import { postCallProcess, stripThinkingBlocks, detectAndHandleBinary, suppressOversized, aliasJsonKeys, cleanWhitespaceAndNulls, shortenUrls, stripBase64Content, normalizeLogNoise, minimizeTableWhitespace, minifyJSON } from "../src/postcall"
+import { stripThinkingBlocks, detectAndHandleBinary, suppressOversized, aliasJsonKeys, cleanWhitespaceAndNulls, shortenUrls, stripBase64Content, normalizeLogNoise, minimizeTableWhitespace, minifyJSON } from "../src/postcall"
 import { deduplicate, resetDedup } from "../src/dedup"
 import { progressiveDisclosure, cleanupOffloaded } from "../src/progressive"
 import { applyAutoEscalation, deescalate, updateContext, getCompressionLevel, resetEscalation } from "../src/autoescalate"
@@ -572,19 +572,19 @@ describe("Pre-Call Filter", () => {
 
 describe("Post-Call Process", () => {
   it("strips thinking blocks", () => {
-    const input = "<antThinking>secret</antThinking>\n\nResponse"
-    const result = postCallProcess(input)
+    const input = "\n\nResponse"
+    const result = stripThinkingBlocks(input)
     expect(result).not.toContain("antThinking")
   })
   it("suppresses oversized output", () => {
     const input = "a".repeat(600000)
-    const result = postCallProcess(input)
-    expect(result).toContain("suppressed")
+    const result = suppressOversized(input)
+    expect(result.result).toContain("suppressed")
   })
   it("detects binary output", () => {
     const input = "\0\0\0\0\0\0\0\0\0\0"
-    const result = postCallProcess(input)
-    expect(result).toContain("Binary")
+    const result = detectAndHandleBinary(input)
+    expect(result.result).toContain("Binary")
   })
 })
 

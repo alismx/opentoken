@@ -13,10 +13,10 @@ interface MetricEntry {
   ts: string
   tool: string
   family: string
+  sessionID?: string
   before_tokens: number
   after_tokens: number
   saved_pct: number
-  project?: string
 }
 
 interface ToolStats {
@@ -96,8 +96,11 @@ function computeTopSavings(entries: MetricEntry[], limit = 10): Array<{ tool: st
     .slice(0, limit)
 }
 
-export function getStatsSummary(): StatsSummary {
-  const entries = parseMetricsFile()
+export function getStatsSummary(sessionID?: string): StatsSummary {
+  const allEntries = parseMetricsFile()
+  const entries = sessionID
+    ? allEntries.filter(e => e.sessionID === sessionID)
+    : allEntries
   const now = new Date()
 
   const totalBefore = entries.reduce((sum, e) => sum + e.before_tokens, 0)
@@ -127,8 +130,8 @@ function formatTokens(n: number): string {
   return `${(n / 1000000).toFixed(1)}M`
 }
 
-export function formatStatsSummary(): string {
-  const stats = getStatsSummary()
+export function formatStatsSummary(sessionID?: string): string {
+  const stats = getStatsSummary(sessionID)
   const lines: string[] = []
 
   lines.push("🌸 opentoken stats")
@@ -160,10 +163,11 @@ export function formatStatsSummary(): string {
 }
 
 // Save summary to disk for TUI to read
-export function saveStatsSummary(): void {
+export function saveStatsSummary(sessionID?: string): void {
   try {
-    const stats = getStatsSummary()
-    fs.writeFileSync(SUMMARY_FILE, JSON.stringify(stats, null, 2))
+    const stats = getStatsSummary(sessionID)
+    const outFile = sessionID ? `${SUMMARY_FILE}.${sessionID}` : SUMMARY_FILE
+    fs.writeFileSync(outFile, JSON.stringify(stats, null, 2))
   } catch {
     // Silent fail — summary is optional
   }

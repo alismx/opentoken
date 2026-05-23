@@ -37,17 +37,47 @@ interface StatusBarState {
   isStreaming: boolean
 }
 
+// Cache sessionID on first poll — never re-read (avoids cross-terminal contamination)
+let sessionID: string | undefined
+let sessionCached = false
+
 // Read metrics.jsonl directly — always fresh, updated after every tool call
-async function readSessionMetrics(): Promise<{ tokensSaved: number; toolCalls: number } | null> {
+async function readSessionMetrics(): Promise<{tokensSaved: number; toolCalls: number } | null> {
   try {
-    // Read session start timestamp
-    let sessionStart = 0
-    try {
-      const startFile = Bun.file(SESSION_START_FILE)
-      if (await startFile.exists()) {
-        const data = JSON.parse(await startFile.text())
-        sessionStart = data.sessionStart || 0
-      }
+    // Cache session-start.json on first poll — never re-read
+    if (!sessionCached) {
+      try {
+        const startFile = Bun.file(SESSION_START_FILE)
+        if (await startFile.exists()) {
+          const data = JSON.parse(await startFile.text())
+          sessionID = data.sessionID
+          sessionCached = true
+        }
+      } catch { /* ignore */ }
+    }
+
+    const file = Bun.file(METRICS_FILE)
+    if (!(await file.exists())) return null
+    const text = await file.text()
+    const lines = text.trim().split("\n").filter((l) => l.trim())
+    let totalSaved = 0
+    let totalCalls = 0
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line)
+        // Filter by sessionID when available (new entries have sessionID field)
+        if (sessionCached && sessionID) {
+          if (entry.sessionID && entry.sessionID !== sessionID) continue
+        }
+        totalSaved += (entry.before_tokens||0) - (entry.after_tokens||0)
+        totalCalls++
+      } catch { /* skip */ }
+    }
+    return { tokensSaved: Math.max(0, totalSaved), toolCalls: totalCalls }
+  } catch {
+    return null
+  }
+}
     } catch { /* ignore */ }
 
     const file = Bun.file(METRICS_FILE)

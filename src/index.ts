@@ -748,24 +748,22 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
         if (saved > 0) {
           trackTokensSaved(sessionID, saved)
           updateContext(sessionID, afterTokens)
-
-          const family = tool === "bash" ? detectFamily(String(input.args?.command || "")) : tool
-
-          if (config.enableMetrics) {
-            await safeStageAsync("recordMetric", () => recordMetric({
-              ts: new Date().toISOString(),
-              tool,
-              family,
-              before_tokens: beforeTokens,
-              after_tokens: afterTokens,
-              saved_pct: Math.round((saved / beforeTokens) * 100),
-            }), undefined)
-            // Keep stats-summary.json and session-memory.json fresh for TUI
-            await safeStageAsync("saveStatsSummary", () => saveStatsSummary(), undefined)
-          }
-
-          // Record metrics (don't inject status line into LLM output — TUI bar handles display)
           const sessionTracker = getSessionTracker(sessionID)
+        }
+
+        const family = tool === "bash" ? detectFamily(String(input.args?.command || "")) : tool
+
+        if (config.enableMetrics) {
+          await safeStageAsync("recordMetric", () => recordMetric({
+            ts: new Date().toISOString(),
+            tool,
+            family,
+            sessionID: sessionID,
+            before_tokens: beforeTokens,
+            after_tokens: afterTokens,
+            saved_pct: beforeTokens > 0 ? Math.round((saved / beforeTokens) * 100) : 0,
+          }), undefined)
+          await safeStageAsync("saveStatsSummary", () => saveStatsSummary(sessionID), undefined)
         }
 
         // Ensure session-start.json exists (fallback if session.created didn't fire)
@@ -775,7 +773,7 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
           const f = Bun.file(startFile)
           if (!(await f.exists())) {
             const tmp = startFile + ".tmp"
-            await Bun.write(tmp, JSON.stringify({ sessionStart: Date.now() }))
+            await Bun.write(tmp, JSON.stringify({ sessionStart: Date.now(), sessionID }))
             fs.renameSync(tmp, startFile)
           }
         } catch { /* ignore */ }
@@ -798,11 +796,13 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
     tool: {
       opentoken_stats: tool({
         description: "Show OpenToken token savings statistics — total saved, by tool, top savings",
-        args: {},
-        async execute(_args, context) {
+        args: {
+          since: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
           try {
-            saveStatsSummary()
-            const summary = formatStatsSummary()
+            const sid = args.since === "all" ? undefined : sessionID
+            const summary = formatStatsSummary(sid)
             return { output: summary }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)

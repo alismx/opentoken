@@ -7,8 +7,8 @@ import os from "os"
 
 const METRICS_DIR = path.join(os.homedir(), ".config", "opentoken")
 const CONFIG_FILE = path.join(METRICS_DIR, "config.json")
-const SESSION_FILE = path.join(METRICS_DIR, "session-memory.json")
 const SESSION_START_FILE = path.join(METRICS_DIR, "session-start.json")
+const STATS_SUMMARY_FILE = path.join(METRICS_DIR, "stats-summary.json")
 
 function formatTokens(n: number): string {
   if (n < 1000) return `${n}`
@@ -29,15 +29,6 @@ function formatDuration(ms: number): string {
   return `${seconds}s`
 }
 
-function levelEmoji(level: string): string {
-  switch (level) {
-    case "ceiling": return "🔥"
-    case "ultra": return "⚡"
-    case "lean": return "🍃"
-    default: return "💤"
-  }
-}
-
 async function isTuiEnabled(): Promise<boolean> {
   try {
     const file = Bun.file(CONFIG_FILE)
@@ -52,6 +43,8 @@ async function isTuiEnabled(): Promise<boolean> {
 function StatusBarWidget(props: { theme: TuiTheme }) {
   const [display, setDisplay] = createSignal("")
   let sessionStart = Date.now()
+  let sessionID: string | undefined
+  let sessionCached = false
   let metricsInterval: ReturnType<typeof setInterval>
 
   async function loadMetrics() {
@@ -61,45 +54,44 @@ function StatusBarWidget(props: { theme: TuiTheme }) {
       return
     }
 
-    // Detect session start from session-start.json to track duration
-    try {
-      const startFile = Bun.file(SESSION_START_FILE)
-      if (await startFile.exists()) {
-        const data = JSON.parse(await startFile.text())
-        if (data.sessionStart) sessionStart = data.sessionStart
+    // Cache session-start.json on first successful read — never re-read
+    if (!sessionCached) {
+      try {
+        const startFile = Bun.file(SESSION_START_FILE)
+        if (await startFile.exists()) {
+          const data = JSON.parse(await startFile.text())
+          sessionStart = data.sessionStart ?? Date.now()
+          sessionID = data.sessionID
+          sessionCached = true
+        } else {
+          return
+        }
+      } catch {
+        return
       }
-    } catch { /* ignore */ }
+    }
 
     const time = formatTime(new Date())
     const duration = formatDuration(Date.now() - sessionStart)
 
-    // Read per-session tracker — reset on each new session
+    // Read this session's summary from per-session file
     try {
-      const sessionFile = Bun.file(SESSION_FILE)
-      if (await sessionFile.exists()) {
-        const data = JSON.parse(await sessionFile.text())
-        const tokensSaved = data.tokensSaved ?? 0
-        const compressionLevel = data.compressionLevel ?? "off"
-        const emoji = levelEmoji(compressionLevel)
-
-        // Staleness check: if file timestamp is older than session start,
-        // the data is from a previous session — don't display it
-        const fileTs = data.timestamp
-        if (fileTs && sessionStart && fileTs < sessionStart) {
-          setDisplay(`🌸 opentoken ready  ${duration}  ${time}`)
-          return
-        }
-
+      const summaryPath = sessionID ? `${STATS_SUMMARY_FILE}.${sessionID}` : STATS_SUMMARY_FILE
+      const summaryFile = Bun.file(summaryPath)
+      if (await summaryFile.exists()) {
+        const data = JSON.parse(await summaryFile.text())
+        const tokensSaved = data.session?.totalSavedTokens ?? 0
         if (tokensSaved > 0) {
-          setDisplay(`${emoji} opentoken saved ${formatTokens(tokensSaved)} tokens  ${duration}  ${time}`)
+          setDisplay(`🗜️ opentoken saved ${formatTokens(tokensSaved)} tokens  ${duration}  ${time}`)
         } else {
           setDisplay(`🌸 opentoken ready  ${duration}  ${time}`)
         }
-        return
+      } else {
+        setDisplay(`🌸 opentoken ready  ${duration}  ${time}`)
       }
-    } catch { /* fall through */ }
-
-    setDisplay(`🌸 opentoken ready  ${duration}  ${time}`)
+    } catch {
+      setDisplay(`🌸 opentoken ready  ${duration}  ${time}`)
+    }
   }
 
   onMount(() => {

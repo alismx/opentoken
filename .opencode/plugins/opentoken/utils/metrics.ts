@@ -9,10 +9,10 @@ interface MetricEntry {
   ts: string
   tool: string
   family: string
+  sessionID?: string
   before_tokens: number
   after_tokens: number
   saved_pct: number
-  project?: string
 }
 
 const METRICS_DIR = path.join(os.homedir(), ".config", "opentoken")
