@@ -28,15 +28,12 @@
 
 ## See It In Action
 
-<table>
-<tr>
-<th width="50%">Before — 2,114 tokens</th>
-<th width="50%">After — 407 tokens (81% ↓)</th>
-</tr>
-<tr>
-<td>
+```bash
+# A real git diff — 2,114 tokens
+$ opencode "what changed in this diff?"
+```
 
-```diff
+<pre lang="diff">
 diff --git a/src/index.ts b/src/index.ts
 index abc123..def456 100644
 --- a/src/index.ts
@@ -44,28 +41,26 @@ index abc123..def456 100644
 @@ -10,6 +10,12 @@ import {
  import { SessionStore } from "./-
  session-store";
-                                        
- const MAX_RETRIES = 3;               
+ const MAX_RETRIES = 3;
 +
 +/// <reference types="bun-types" />
 +import { z } from "zod";
+</pre>
+
+```bash
+# Same query — OpenToken compresses to 407 tokens
 ```
 
-</td>
-<td>
-
 ```
-M src/index.ts
-─────────────────────────────────────────
+❯ opencode "what changed?"
 
-Family: git  •  81% compression
+  M src/index.ts                          Family: git
+  ─────────────────────────────────────   ─────────────
+  +/// <reference types="bun-types" />   81% compression
+  +import { z } from "zod";              2,114 → 407 tokens
 ```
 
-</td>
-</tr>
-</table>
-
-Works on **any tool output** — file reads, builds, test suites, ls, docker, cargo, npm, pip. The model sees compressed input but responds normally.
+No configuration. No prompt changes. The model answers the same way — it just sees less noise.
 
 ---
 
