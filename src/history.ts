@@ -33,12 +33,12 @@ function estimateTotalTokens(
 	let total = 0;
 	for (const m of messages) {
 		for (const p of m.parts) {
-			if (p.type === "text") total += estimateTokens((p as any).text ?? "");
-			if (p.type === "reasoning")
-				total += estimateTokens((p as any).text ?? "");
+			if (p.type === "text") total += estimateTokens(p.text);
+			if (p.type === "reasoning") total += estimateTokens(p.text);
 			if (p.type === "tool") {
-				const state = (p as any).state;
-				if (state?.output) total += estimateTokens(state.output);
+				const state = p.state;
+				if (state.status === "completed" && state.output)
+					total += estimateTokens(state.output);
 			}
 		}
 	}
@@ -163,9 +163,8 @@ function summarizeBashOutput(command: string, output: string): string {
 function compressToolPart(part: Part, config: HistoryConfig): string | null {
 	if (part.type !== "tool") return null;
 
-	const toolPart = part as any;
-	const toolName = toolPart.tool || "unknown";
-	const state = toolPart.state as any;
+	const toolName = part.tool || "unknown";
+	const state = part.state;
 
 	// Keep errors and in-progress tools
 	if (
@@ -186,13 +185,13 @@ function compressToolPart(part: Part, config: HistoryConfig): string | null {
 
 	// Command-specific summaries
 	if (toolName === "read") {
-		const filePath = (state.input as any)?.filePath ?? "unknown";
+		const filePath = String(state.input.filePath ?? "unknown");
 		const summary = summarizeReadResult(output);
 		return `[read: ${filePath} — ${summary}, ${estimateTokens(output)} tokens]`;
 	}
 
 	if (toolName === "bash") {
-		const command = String((state.input as any)?.command ?? "");
+		const command = String(state.input.command ?? "");
 		const summary = summarizeBashOutput(command, output);
 		return `[bash: ${summary}, ${estimateTokens(output)} tokens]`;
 	}
@@ -218,8 +217,7 @@ function compressToolPart(part: Part, config: HistoryConfig): string | null {
 // Compress reasoning parts
 function compressReasoningPart(part: Part): string | null {
 	if (part.type !== "reasoning") return null;
-	const rp = part as any;
-	const text = rp.text || "";
+	const text = part.text || "";
 	if (text.length === 0) return null;
 	return `[reasoning: ${estimateTokens(text)} tokens]`;
 }
@@ -227,10 +225,9 @@ function compressReasoningPart(part: Part): string | null {
 // Compress text parts (assistant responses)
 function compressTextPart(part: Part): string | null {
 	if (part.type !== "text") return null;
-	const tp = part as any;
-	const text = tp.text || "";
+	const text = part.text || "";
 	if (text.length === 0) return null;
-	if (tp.synthetic) return null; // Keep synthetic messages
+	if (part.synthetic) return null; // Keep synthetic messages
 
 	// Short responses pass through
 	if (text.length < 200) return null;
@@ -280,11 +277,11 @@ function compressMessageParts(parts: Part[], config: HistoryConfig): Part[] {
 			const summary = compressToolPart(part, config);
 			if (summary) {
 				// Keep type as "tool" to preserve state contract — only replace output
-				const state = (part as any).state;
+				const state = part.state;
 				compressed.push({
 					...part,
 					state: state ? { ...state, output: summary } : { output: summary },
-				});
+				} as Part);
 			} else {
 				compressed.push(part);
 			}
@@ -338,7 +335,7 @@ function collapseConsecutiveTools(parts: Part[]): Part[] {
 				messageID: "",
 				type: "text",
 				text: toolSummaries[0],
-			} as any);
+			});
 		} else if (toolSummaries.length > 1) {
 			result.push({
 				id: "collapsed",
@@ -346,15 +343,14 @@ function collapseConsecutiveTools(parts: Part[]): Part[] {
 				messageID: "",
 				type: "text",
 				text: `[${toolSummaries.length} tool results: ${toolSummaries.join("; ")}]`,
-			} as any);
+			});
 		}
 		toolSummaries = [];
 	}
 
 	for (const part of parts) {
-		const tp = part as any;
-		if (tp.type === "text" && tp.text?.startsWith("[")) {
-			toolSummaries.push(tp.text);
+		if (part.type === "text" && part.text.startsWith("[")) {
+			toolSummaries.push(part.text);
 		} else {
 			flushTools();
 			result.push(part);

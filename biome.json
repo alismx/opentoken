@@ -17,13 +17,13 @@
 		"rules": {
 			"recommended": true,
 			"suspicious": {
-				"noExplicitAny": "off",
-				"noImplicitAnyLet": "off",
+				"noExplicitAny": "error",
+				"noImplicitAnyLet": "error",
 				"noAssignInExpressions": "off",
 				"noControlCharactersInRegex": "off"
 			},
 			"style": {
-				"noNonNullAssertion": "off",
+				"noNonNullAssertion": "error",
 				"useTemplate": "off"
 			},
 			"complexity": {

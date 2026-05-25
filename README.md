@@ -9,6 +9,8 @@
   <p><strong>Typical savings: 70–90% on tool output tokens.</strong></p>
 </div>
 
+> **🏆 862,301 tokens saved in one session — $26.00. Verified.**
+
 ---
 
 ## Table of Contents
@@ -418,7 +420,7 @@ OpenToken is designed with defense-in-depth:
 - **Secret redaction** — Runs first in every pipeline, before any other processing (33 patterns compiled into a single alternation regex for performance)
 - **SHA256 checksum verification** — `install.sh` downloads to a temp tarball, computes SHA256, and supports `--sha256 <hash>` for automatic integrity verification
 - **File permission hardening** — Session state, metrics, and error files are created with `0o600` (owner-only read/write); config directories use `0o700`
-- **Pinned dependencies** — All package versions are pinned to exact versions — no range-based auto-updates that could introduce supply chain changes
+- **Reproducible dependencies** — `bun.lock` locks exact dependency versions for reproducible installs, preventing supply chain changes between commits
 
 ---
 

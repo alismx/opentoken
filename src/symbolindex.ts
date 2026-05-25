@@ -157,7 +157,7 @@ function extractSymbols(filePath: string, content: string): SymbolEntry[] {
 
 	for (const { type, regex } of config.patterns) {
 		regex.lastIndex = 0;
-		let match;
+		let match: RegExpExecArray | null;
 		while ((match = regex.exec(content)) !== null) {
 			const lineNum = content.slice(0, match.index).split("\n").length;
 			const name = match[2] || match[3] || match[1] || "unknown";

@@ -272,7 +272,7 @@ function extractSkeletonRegex(content: string, language: string): string {
 
 	for (const pattern of config.patterns) {
 		pattern.lastIndex = 0;
-		let match;
+		let match: RegExpExecArray | null;
 		while ((match = pattern.exec(content)) !== null) {
 			const lineNum = content.slice(0, match.index).split("\n").length;
 			const text = match[0].trim();

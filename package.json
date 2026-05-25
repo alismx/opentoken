@@ -4,6 +4,10 @@
   "description": "Token-saving companion for OpenCode — intercepts, filters, and compresses tool outputs before they reach the model",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://github.com/MrGray17/opentoken",
+  "bugs": {
+    "url": "https://github.com/MrGray17/opentoken/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/MrGray17/opentoken.git"
@@ -24,6 +28,8 @@
   "files": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "!src/**/*.test.ts",
+    "!src/**/*.spec.ts",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

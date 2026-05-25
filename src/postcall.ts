@@ -74,14 +74,17 @@ export function detectAndHandleBinary(text: string): {
 }
 
 // #17: Output suppression — block entirely if too large
-export function suppressOversized(text: string): {
+export function suppressOversized(
+	text: string,
+	maxBytes: number = MAX_OUTPUT_BYTES,
+): {
 	suppressed: boolean;
 	result: string;
 } {
-	if (text.length > MAX_OUTPUT_BYTES) {
+	if (text.length > maxBytes) {
 		return {
 			suppressed: true,
-			result: `[Output suppressed: ${Math.round(text.length / 1024)}KB exceeds ${MAX_OUTPUT_BYTES / 1024}KB limit — use targeted queries instead]`,
+			result: `[Output suppressed: ${Math.round(text.length / 1024)}KB exceeds ${Math.round(maxBytes / 1024)}KB limit — use targeted queries instead]`,
 		};
 	}
 	return { suppressed: false, result: text };

@@ -186,7 +186,7 @@ function extractKeywords(summary: string): string[] {
 function extractFiles(summary: string): string[] {
 	const filePattern = /(?:^|\s|["'`])([/\w.-]+\.\w{1,6})(?:["'`\s,;:]|$)/g;
 	const files: string[] = [];
-	let match;
+	let match: RegExpExecArray | null;
 
 	while ((match = filePattern.exec(summary)) !== null) {
 		const f = match[1];

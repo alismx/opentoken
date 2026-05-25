@@ -120,7 +120,7 @@ function outlineSource(filePath: string, content: string): string {
 
 	const symbols: { line: number; text: string }[] = [];
 	for (const pattern of patterns) {
-		let match;
+		let match: RegExpExecArray | null;
 		pattern.lastIndex = 0;
 		while ((match = pattern.exec(content)) !== null) {
 			const lineNum = content.slice(0, match.index).split("\n").length;

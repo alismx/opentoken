@@ -478,7 +478,7 @@ async function applyBashFilter(
 
 	const suppressed = safeStage(
 		"suppressOversized",
-		() => suppressOversized(output),
+		() => suppressOversized(output, config.maxOutputBytes),
 		{ suppressed: false, result: output },
 	);
 	if (suppressed.suppressed) return suppressed.result;
@@ -748,7 +748,7 @@ async function applyReadFilter(
 
 	const suppressed = safeStage(
 		"suppressOversized",
-		() => suppressOversized(content),
+		() => suppressOversized(content, config.maxOutputBytes),
 		{ suppressed: false, result: content },
 	);
 	if (suppressed.suppressed) return suppressed.result;
@@ -912,7 +912,7 @@ async function applyGrepFilter(
 
 	const suppressed = safeStage(
 		"suppressOversized",
-		() => suppressOversized(output),
+		() => suppressOversized(output, config.maxOutputBytes),
 		{ suppressed: false, result: output },
 	);
 	if (suppressed.suppressed) return suppressed.result;
@@ -1022,7 +1022,7 @@ async function applyGlobFilter(
 
 	const suppressed = safeStage(
 		"suppressOversized",
-		() => suppressOversized(output),
+		() => suppressOversized(output, config.maxOutputBytes),
 		{ suppressed: false, result: output },
 	);
 	if (suppressed.suppressed) return suppressed.result;
@@ -1552,7 +1552,7 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
 					const stats = getMemoryStats();
 					if (stats.total > 0) {
 						// Extract keywords from the latest user message
-						const latestUserMsg = input as any;
+						const latestUserMsg = input as { message?: { content?: string } };
 						const keywords = latestUserMsg?.message?.content
 							? extractContextKeywords(latestUserMsg.message.content)
 							: [];

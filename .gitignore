@@ -4,6 +4,9 @@ dist/
 .env
 .cache/
 
+# Lockfiles — keep bun.lock only (Bun project)
+package-lock.json
+
 # Internal dev docs (not for public)
 TO-DO.md
 AGENTS.md

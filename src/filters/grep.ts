@@ -65,8 +65,11 @@ export function filterGrep(output: string): string {
 			if (!parsed) continue;
 			if (NOISE_PATTERNS.some((p) => p.test(parsed.file))) continue;
 
-			if (!matches.has(parsed.file)) matches.set(parsed.file, []);
-			const fileMatches = matches.get(parsed.file)!;
+			let fileMatches = matches.get(parsed.file);
+			if (!fileMatches) {
+				fileMatches = [];
+				matches.set(parsed.file, fileMatches);
+			}
 			if (fileMatches.length < MAX_MATCHES_PER_FILE) {
 				fileMatches.push(`${parsed.lineNum}: ${parsed.content}`);
 			}
@@ -84,7 +87,11 @@ export function filterGrep(output: string): string {
 			const [, file, lineNum, , content] = match;
 			if (!matches.has(file)) matches.set(file, []);
 
-			const fileMatches = matches.get(file)!;
+			let fileMatches = matches.get(file);
+			if (!fileMatches) {
+				fileMatches = [];
+				matches.set(file, fileMatches);
+			}
 			if (fileMatches.length < MAX_MATCHES_PER_FILE) {
 				fileMatches.push(`${lineNum}: ${content}`);
 			}
