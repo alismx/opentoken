@@ -1,5 +1,5 @@
 {
-  "name": "opentoken",
+  "name": "@mrgray17/opentoken",
   "version": "1.2.0",
   "description": "Token-saving companion for OpenCode — intercepts, filters, and compresses tool outputs before they reach the model",
   "type": "module",
