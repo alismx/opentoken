@@ -49,6 +49,11 @@ import {
 	writeSessionSummary,
 } from "./memory";
 import {
+	compressOutput,
+	getConcisenessDirective,
+	getOutputBudget,
+} from "./outputcomp";
+import {
 	aliasJsonKeys,
 	cleanWhitespaceAndNulls,
 	detectAndHandleBinary,
@@ -77,11 +82,11 @@ import {
 	resetSessionTracker,
 	trackError,
 	trackFile,
+	trackOutputTokensSaved,
 	trackTokensSaved,
 	trackToolCall,
 	writeSessionState,
 } from "./session";
-
 // Phase 2 imports
 import { extractSkeleton } from "./skeleton";
 import { generateSessionSummary, resetStatusLine } from "./statusline";
@@ -110,6 +115,7 @@ interface OpenTokenConfig {
 	enableTui: boolean; // TUI status bar (default true)
 	tuiUseEmoji: boolean; // TUI: use emoji vs ASCII (default true)
 	allowLockFileReads: boolean; // Allow reading lock files despite minified/generated blocking (default false)
+	enableOutputSaving: boolean; // Reduce output tokens via directives, caps, and response compression
 }
 
 const DEFAULT_CONFIG: OpenTokenConfig = {
@@ -125,6 +131,7 @@ const DEFAULT_CONFIG: OpenTokenConfig = {
 	enableTui: true, // TUI status bar
 	tuiUseEmoji: true, // TUI: use emoji vs ASCII
 	allowLockFileReads: false, // Lock files blocked by default
+	enableOutputSaving: true,
 };
 
 let config: OpenTokenConfig = DEFAULT_CONFIG;
@@ -1542,11 +1549,51 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
 			}
 		},
 
+		// Cap output tokens to budget
+		"chat.params": async (_input, output) => {
+			if (!config.enableOutputSaving) return;
+			output.maxOutputTokens = getOutputBudget();
+		},
+
+		// Compress model response text post-generation
+		"experimental.text.complete": async (_input, output) => {
+			if (!config.enableOutputSaving) return;
+			try {
+				const before = estimateTokens(output.text);
+				const compressed = compressOutput(output.text);
+				if (compressed !== output.text) {
+					const after = estimateTokens(compressed);
+					const saved = before - after;
+					trackOutputTokensSaved(sessionID, saved);
+					if (config.enableMetrics) {
+						recordMetric({
+							ts: new Date().toISOString(),
+							tool: "assistant",
+							family: "assistant",
+							sessionID,
+							before_tokens: before,
+							after_tokens: after,
+							saved_pct: before > 0 ? Math.round((saved / before) * 100) : 0,
+							role: "assistant",
+						});
+					}
+					output.text = compressed;
+				}
+			} catch {
+				// Silent fail — never break output
+			}
+		},
+
 		// Inject session memory into system prompt
 		"experimental.chat.system.transform": async (input, output) => {
-			if (!config.enableHistoryCompression) return;
-
 			try {
+				// Output conciseness directive — fires independently of history compression
+				if (config.enableOutputSaving) {
+					output.system.push(getConcisenessDirective());
+				}
+
+				if (!config.enableHistoryCompression) return;
+
 				// Inject session memory if enabled
 				if (config.enableSessionMemory) {
 					const stats = getMemoryStats();

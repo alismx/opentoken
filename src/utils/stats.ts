@@ -17,6 +17,7 @@ interface MetricEntry {
 	before_tokens: number;
 	after_tokens: number;
 	saved_pct: number;
+	role?: "tool" | "assistant";
 }
 
 interface ToolStats {

@@ -13,6 +13,7 @@ interface MetricEntry {
 	before_tokens: number;
 	after_tokens: number;
 	saved_pct: number;
+	role?: "tool" | "assistant";
 }
 
 const METRICS_DIR = path.join(os.homedir(), ".config", "opentoken");

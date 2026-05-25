@@ -71,6 +71,11 @@
       "type": "boolean",
       "default": false,
       "description": "Allow reading lock files despite minified/generated blocking"
+    },
+    "enableOutputSaving": {
+      "type": "boolean",
+      "default": true,
+      "description": "Reduce output tokens via system directives, budget caps, and response compression"
     }
   },
   "additionalProperties": false

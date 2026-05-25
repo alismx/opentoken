@@ -1,15 +1,17 @@
 <div align="center">
   <h1>OpenToken</h1>
-  <p><strong>Token-saving companion for OpenCode.</strong> Intercepts, filters, and compresses tool outputs before they reach the model.</p>
+  <p><strong>Token-saving companion for OpenCode.</strong> Intercepts, filters, and compresses tool outputs <em>and</em> model responses — before they reach the context window.</p>
   <p>
     <a href="https://github.com/MrGray17/opentoken/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
     <img src="https://img.shields.io/badge/bun-%3E%3D1.2.0-fbb744.svg" alt="Bun >=1.2.0">
     <a href="https://github.com/MrGray17/opentoken/stargazers"><img src="https://img.shields.io/github/stars/MrGray17/opentoken" alt="GitHub Stars"></a>
   </p>
-  <p><strong>Typical savings: 70–90% on tool output tokens.</strong></p>
+  <p>
+    <strong>Input pipeline:</strong> 70–90% savings on tool output tokens — <strong>Output pipeline:</strong> max conciseness with zero risk.
+  </p>
 </div>
 
-> **🏆 862,301 tokens saved in one session — $26.00. Verified.**
+> **🏆 862,301 tokens saved in a single 22-hour session — $25.88. Verified.**
 
 ---
 
@@ -17,15 +19,16 @@
 
 - [Real Production Numbers](#real-production-numbers)
 - [How It Works](#how-it-works)
-- [Compression Layers](#compression-layers)
-- [Command Families](#command-families)
-- [Per-Tool Performance](#per-tool-performance)
+- [Features](#features)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
+- [Output Saving](#output-saving)
+- [TUI Status Bar](#tui-status-bar)
 - [Safety Guarantees](#safety-guarantees)
 - [Diagnostics](#diagnostics)
 - [Data Storage](#data-storage)
 - [Security](#security)
+- [Architecture Reference](#architecture-reference)
 - [Development](#development)
 - [License](#license)
 
@@ -33,7 +36,7 @@
 
 ## Real Production Numbers
 
-Data from a single 22-hour session (977 tool calls):
+Data from a single 22-hour session (977 tool calls) with default settings:
 
 | Metric | Value |
 |---|---|
@@ -64,159 +67,49 @@ At typical pricing ($5/MTok input, $25/MTok output):
 
 **~$26 saved per session.** At 100 sessions/day: **$2,600/day → ~$78,000/month**.
 
-### Savings Breakdown
-
-| Technique | Contribution |
-|---|---|
-| AST skeleton extraction (read) | ~60% of read savings |
-| Family-specific filters (bash) | ~25% of bash savings |
-| Whitespace + key aliasing | ~5–10% across all tools |
-| TOON format (JSON → tabular) | ~5% on JSON outputs |
-| LTSC (LZ77-style) | ~3% on repetitive content |
-| Cross-tool dedup | ~2% on duplicates |
-| Auto-escalation | Variable — increases under pressure |
-
-The remaining ~28% is content already small (short outputs, <80 lines) or that cannot be compressed further (code, structured data).
-
 ---
 
 ## How It Works
 
-```
-OpenCode tool call → [ compression pipeline ] → model sees cleaned output
-```
-
-OpenToken installs as an OpenCode plugin and hooks into the tool execution lifecycle. Every tool output passes through a multi-stage pipeline that strips noise, removes redundancy, and compresses large outputs — all transparently to the model and the user.
-
-### Architecture
+OpenToken operates as an OpenCode plugin with two independent pipelines:
 
 ```
-                    ┌─────────────────────────┐
-                    │   OpenCode Session       │
-                    │   (tool.execute)         │
-                    └────────┬────────────────┘
-                             │
-                             ▼
-                    ┌─────────────────────────┐
-                    │   Pre-Call Filters       │
-                    │   • Command rewriting    │
-                    │   • Minified file block  │
-                    │   • Size caps            │
-                    │   • LSP-First routing    │
-                    └────────┬────────────────┘
-                             │
-                             ▼
-                    ┌─────────────────────────┐
-                    │   Content Router         │
-                    │   (detect type/file)     │
-                    └────────┬────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-      ┌────────────┐ ┌────────────┐ ┌────────────┐
-      │  bash      │ │  read      │ │  grep/glob │
-      │  pipeline  │ │  pipeline  │ │  pipeline  │
-      └─────┬──────┘ └─────┬──────┘ └─────┬──────┘
-            │              │              │
-            ▼              ▼              ▼
-      ┌─────────────────────────────────────────┐
-      │   Post-Call Compression (shared)        │
-      │   • Secrets → Binary → Thinking strip   │
-      │   • Key aliasing → TOON → Whitespace    │
-      │   • Family filter → Dedup → LZW → LTSC │
-      │   • Auto-escalation → Conservative cmp  │
-      └─────────────────┬───────────────────────┘
-                        │
-                        ▼
-              ┌─────────────────────┐
-              │  Model receives     │
-              │  compressed output  │
-              └─────────────────────┘
+Tool call ──→ [ Input pipeline ] ──→ model sees cleaned output
+                                          ↓
+Model response ──→ [ Output pipeline ] ──→ trimmed response
 ```
 
-### Pipeline Stages by Tool
+**Input pipeline** — intercepts every tool output (read, bash, grep, glob) and runs it through 30+ compression stages: secret redaction, binary detection, thinking-block stripping, key aliasing, TOON conversion, minification, LTSC/LZW compression, deduplication, progressive disclosure, and more. Each stage ends with a conservative length guard: if output grew, the original is returned.
 
-| Tool | Pipeline |
-|---|---|
-| **bash** | Secrets → Binary → Suppress → Strip thinking → ANSI strip → Clean whitespace → Key aliasing → TOON → Normalize → Minify JSON → Minimize tables → Normalize logs → Diff/log fold → JSON sample → Family detect → Family filter → Reversible → Auto-escalation → LTSC → LZW |
-| **read** | Secrets → Binary → Suppress → Strip thinking → Cache → Skeleton extraction → Clean whitespace → Key aliasing → TOON → Normalize → Minify JSON → Minimize tables → Normalize logs → Diff/log fold → JSON sample → Reversible → Auto-escalation → LTSC → LZW |
-| **grep** | Secrets → Suppress → Strip thinking → Minify JSON → Minimize tables → Normalize logs → Grep filter → Progressive disclosure → Reversible → Auto-escalation → LTSC → LZW |
-| **glob** | *(same as grep)* → Glog filter → ... |
+**Output pipeline** — caps model response length via `maxOutputTokens`, injects a conciseness directive into the system prompt, and post-processes completed responses to strip thinking blocks, ANSI codes, boilerplate phrases, and shorten URLs. Also applied: LTSC and LZW lossless compression — all under the same 0-risk conservative filter.
 
 ---
 
-## Compression Layers
+## Features
 
-OpenToken applies up to **35 distinct compression layers** depending on content type and tool. Each layer is independently configured, fail-safe, and conservative.
+### Input Pipeline (tool outputs)
+- **Secret redaction** — 33+ patterns compiled into a single alternation regex, runs before any other processing
+- **Binary detection** — 64 KB NUL byte scan; extracts UTF-8 text or suppresses entirely
+- **Thinking block stripping** — `<antThinking>`, `<thinking>`, `<reasoning>`, `<scratchpad>`, `<inner_monologue>`
+- **JSON minification** — lossless whitespace removal from JSON output
+- **Key aliasing** — maps 80+ long JSON keys to short aliases (`description` → `desc`)
+- **TOON format** — JSON arrays of objects → tabular CSV-like format. 40–50% savings
+- **LTSC + LZW compression** — LZ77-style + dictionary compression for repetitive content
+- **AST skeleton extraction** — replaces full file reads with structural signatures (functions, classes, imports). ~88% reduction
+- **Log noise normalization** — replaces timestamps, PIDs, elapsed times with static placeholders
+- **Progressive disclosure** — large outputs offloaded to temp file + summary pointer
+- **Family-specific filters** — 8 specialized handlers for git, npm, cargo, test, fs, docker, pip, make
+- **Auto-escalation** — ratchets compression intensity as context fills (50% → LEAN, 70% → ULTRA, 85% → CEILING)
 
-| # | Layer | Module | What It Does |
-|---|---|---|---|
-| L1 | Command rewrite | `precall.ts` | Auto-adds `--silent`, `--quiet`, `--oneline` to 17+ command types |
-| L2 | Minified file block | `precall.ts` | Skips reads of `.min.js`, `dist/`, `build/`, `node_modules/`, lock files |
-| L3 | Size caps | `precall.ts` | Blocks writes >50 KB, edits >20 KB |
-| L4 | Secret redaction | `utils/secrets.ts` | Redacts 33+ patterns (API keys, tokens, passwords, JWTs) |
-| L5 | LSP-first enforcement | `lspfirst.ts` | Blocks grep/glob on code symbol patterns; routes to LSP tools |
-| L6 | Family-specific filters | `families/*.ts` | 8 specialized filters (git, npm, cargo, test, fs, docker, pip, make) |
-| L7 | Tool-specific compression | `filters/*.ts` | Read skeleton outlines, grep dedup, glob noise removal |
-| L8 | Binary detection | `postcall.ts` | 64 KB NUL byte scan; extracts UTF-8 text or suppresses |
-| L9 | Output suppression | `postcall.ts` | Blocks output >100 KB entirely |
-| L10 | Thinking block stripping | `postcall.ts` | Removes `<antThinking>`, `<reasoning>`, `<scratchpad>`, `<inner_monologue>` |
-| L11 | Whitespace/null cleanup | `postcall.ts` | Strips null values, empty objects/arrays, timestamps, hashes |
-| L12 | Key aliasing | `postcall.ts` | Maps 80+ long JSON keys to short aliases (`description` → `desc`) |
-| L13 | URL shortening | `postcall.ts` | Strips query parameters and hash from URLs >100 chars |
-| L14 | Base64 stripping | `postcall.ts` | Replaces inline `data:...;base64,...` with short placeholder |
-| L15 | Cross-call dedup | `dedup.ts` | Identical/similar output within 16-call window → single reference line |
-| L16 | Progressive disclosure | `progressive.ts` | Large output (>80 lines, >8 KB) offloaded to temp file + summary pointer |
-| L17 | Auto-escalation | `autoescalate.ts` | Ratchets compression intensity as context fills (50% → LEAN, 70% → ULTRA, 85% → CEILING) |
-| L18 | AST skeleton extraction | `skeleton.ts` | Replaces full file reads with structural signatures (functions, classes, imports). ~88% reduction |
-| L19 | Diff folding | `folding.ts` | Collapses unchanged diff context lines |
-| L20 | Log folding | `folding.ts` | Collapses repeated log lines (Python, K8s, syslog formats) |
-| L21 | JSON statistical sampling | `jsonsample.ts` | Large JSON arrays → schema discovery + representative samples |
-| L22 | Reversible compression | `rewind.ts` | Aggressive head(10)+tail(5) extraction; full original stored on disk for retrieval |
-| L23 | Content-aware router | `router.ts` | Detects content type (code, json, diff, log, etc.) → fires only relevant stages |
-| L24 | Stack trace compression | `postcall.ts` | Detects stack frames; collapses middle frames, keeps top + bottom |
-| L25 | Symbol index | `symbolindex.ts` | Background codebase indexing at session start — enables symbol-based queries |
-| L26 | Session memory | `memory.ts` | Persists previous session summary; injects top-3 relevant on restart |
-| L27 | TOON format conversion | `toon.ts` | JSON arrays of objects → tabular CSV-like format. 40–50% savings |
-| L28 | Whitespace normalization | `postcall.ts` | Collapses 3+ newlines, strips trailing whitespace, normalizes tabs |
-| L29 | Log noise normalization | `postcall.ts` | Replaces timestamps, PIDs, elapsed times with static placeholders |
-| L30 | Table minimization | `postcall.ts` | Strips padding/alignment from CLI tables |
-| L31 | JSON minification | `postcall.ts` | Lossless whitespace removal from JSON output |
-| L32 | ANSI escape stripping | `postcall.ts` | Removes terminal color codes and control sequences |
-| L33 | LTSC (Lossless Token Sequence Compression) | `ltsc.ts` | LZ77-style — finds repeated substrings, replaces with dictionary meta-tokens. 18–27% savings |
-| L34 | LZW token substitution | `lzw.ts` | Dictionary compression for repetitive content (stack traces, error logs) |
-| L35 | Cross-tool dedup | `dedup.ts` | Identical content from different tools → single reference |
+### Output Pipeline (model responses)
+- **System conciseness directive** — appended to system prompt to encourage brevity
+- **Output budget cap** — `maxOutputTokens` set to 4096 by default
+- **Response compression** — boilerplate elimination (18 start/end-anchored patterns), thinking block stripping, ANSI stripping, whitespace normalization, URL shortening
+- **Lossless token compression** — LTSC + LZW applied to response text
+- **Metrics tracking** — per-response token savings recorded when metrics are enabled
 
-> **Conservative filter**: Every pipeline ends with a comparison — if filtered output ≥ original size, the original is returned untouched.
-
----
-
-## Command Families
-
-OpenToken detects the command being executed and applies a tailored filter:
-
-| Family | Commands | What It Does |
-|---|---|---|
-| **git** | `git status`, `diff`, `log`, `show`, `blame` | Extracts only changed/untracked files, diff hunks, commit SHAs |
-| **npm** | `npm install`, `test`, `run`, `npx` | Strips dependency trees, keeps added/changed/removed + warnings/errors |
-| **cargo** | `cargo build`, `test`, `clippy`, `check` | Strips compile progress; keeps errors, warnings, test results |
-| **test** | `pytest`, `jest`, `vitest`, `go test` | Strips pass lines; keeps failures, assertions, summary table |
-| **fs** | `ls`, `find`, `tree`, `cat` (source files) | Groups by directory, strips noise dirs, deduplicates paths. `cat` routes through AST skeleton |
-| **docker** | `docker build`, `pull`, `push` | Strips progress bars, layer hashes, extraction status |
-| **pip** | `pip install` | RLE-collapses "Requirement already satisfied" lines |
-| **make** | `make`, `cmake` | Folds `[N%]` compilation progress — unless adjacent to warnings/errors |
-| **generic** | Everything else | Head(20)+tail(20) preservation, stack trace compression, UTF-8 safe truncation |
-
----
-
-## Per-Tool Performance
-
-| Tool | Pipeline Length | Key Savings Mechanism | Typical Savings |
-|---|---|---|---|
-| `read` | 20 stages | AST skeleton extraction (88% reduction) | 95–99% |
-| `bash` | 20 stages | Family-specific filters + TOON + LTSC | 40–60% |
-| `grep` | 12 stages | Grep dedup + grouping + progressive disclosure | 75–85% |
-| `glob` | 12 stages | Noise directory filtering + grouping + progressive disclosure | 70–80% |
+### Zero Risk Guarantee
+Every transformation ends with a conservative comparison — if the filtered output is longer than or equal to the original, the original is returned untouched. No surprises.
 
 ---
 
@@ -239,53 +132,29 @@ Install a specific version:
 OPENTOKEN_VERSION=1.1.0 curl -fsSL https://raw.githubusercontent.com/MrGray17/opentoken/refs/heads/main/install.sh | bash
 ```
 
-Verify checksum:
+Verify checksum (recommended):
 
 ```bash
-bash install.sh --sha256 <expected-sha256>
+curl -fsSL https://raw.githubusercontent.com/MrGray17/opentoken/main/SHA256SUMS | sha256sum -c - --ignore-missing
 ```
 
-### Manual install
+### Manual Install
 
 ```bash
-mkdir -p ~/.config/opencode/plugins/opentoken
-curl -fsSL https://github.com/MrGray17/opentoken/archive/refs/heads/main.tar.gz \
-  | tar xz --strip-components=1 -C ~/.config/opencode/plugins/opentoken
+git clone https://github.com/MrGray17/opentoken.git ~/.config/opencode/plugins/opentoken
+cd ~/.config/opencode/plugins/opentoken
+bun install
 ```
 
-### Install via npm
+The plugin auto-loads when OpenCode starts. No extra config required.
 
-```bash
-npm install github:MrGray17/opentoken
-```
+### Verify It's Working
 
-Then add to your OpenCode config:
-
-```json
-{
-  "plugin": ["opentoken"]
-}
-```
-
-### Per-project (local copy)
-
-```bash
-mkdir -p .opencode/plugins
-cp -r node_modules/opentoken/src .opencode/plugins/opentoken
-```
-
-### Verify
-
-Use the `opentoken_health` MCP tool to confirm the plugin is active:
+Run any OpenCode command — you'll see stderr output:
 
 ```
-🌸 opentoken health check
-
-  Total errors: 0
-  No errors recorded ✅
-
-  Config: metrics=true, symbols=true
-  Context: lean
+[OpenToken] Plugin loading...
+[OpenToken] Loaded. Symbol index: true, Metrics: true
 ```
 
 ---
@@ -298,11 +167,15 @@ Create `~/.config/opentoken/config.json` (all fields optional):
 {
   "maxOutputBytes": 10485760,
   "maxProcessingMs": 5000,
-  "safeReadRoot": "/path/to/project",
   "enableMetrics": true,
   "enableSymbolIndex": true,
-  "conservativeUseTokens": false,
-  "enableTui": true
+  "enableHistoryCompression": false,
+  "enableSessionMemory": false,
+  "enableTui": true,
+  "tuiUseEmoji": true,
+  "enableOutputSaving": true,
+  "allowLockFileReads": false,
+  "conservativeUseTokens": false
 }
 ```
 
@@ -310,29 +183,59 @@ Create `~/.config/opentoken/config.json` (all fields optional):
 
 | Field | Default | Description |
 |---|---|---|
-| `maxOutputBytes` | 10485760 (10 MB) | Hard limit — reject outputs larger than this |
+| `maxOutputBytes` | 10485760 (10 MB) | Hard limit — reject tool outputs larger than this |
 | `maxProcessingMs` | 5000 | Timeout per pipeline stage (ms) |
 | `safeReadRoot` | Project root | Only allow reads under this directory |
-| `enableMetrics` | `true` | Track per-call token savings to disk |
+| `enableMetrics` | `true` | Track per-call token savings to disk (JSONL) |
 | `enableSymbolIndex` | `true` | Build and query code symbol index at startup |
-| `conservativeUseTokens` | `false` | Use token count (slower) vs. byte count (faster) for safety comparison |
-| `enableTui` | `true` | Show the TUI status bar in the prompt area |
+| `enableHistoryCompression` | `false` | Enable compression for history/memory hooks (opt-in) |
+| `historyCompressionWindow` | 12 | Messages to keep full-fidelity when history compression is active |
+| `enableSessionMemory` | `false` | Cross-session memory persistence (opt-in) |
+| `enableTui` | `true` | Show the TUI clock widget in the prompt area |
+| `tuiUseEmoji` | `true` | TUI: use emoji vs ASCII fallback |
+| `enableOutputSaving` | `true` | Reduce model response tokens via directives, budget caps, and compression |
+| `allowLockFileReads` | `false` | Allow reading lock files despite minified/generated blocking |
+| `conservativeUseTokens` | `false` | Use token count (slower) vs byte count (faster) for safety comparison |
+
+---
+
+## Output Saving
+
+When `enableOutputSaving` is `true` (default), OpenToken applies three techniques to reduce model response tokens:
+
+**1. System Directive** — prepends a conciseness instruction to the system prompt:
+```
+Be concise. Prefer code over explanation. Omit pleasantries, hedging, and restatements.
+```
+
+**2. Output Budget** — caps `maxOutputTokens` at 4096 tokens, preventing the model from generating excessively long responses.
+
+**3. Response Compression** — post-processes completed responses through a dedicated pipeline:
+
+| Stage | Description |
+|---|---|
+| Thinking block strip | Removes `<antThinking>`, `<thinking>`, `<reasoning>` blocks |
+| ANSI escape strip | Strips color codes and terminal control sequences |
+| Whitespace normalization | Collapses 3+ newlines, strips trailing spaces |
+| Boilerplate elimination | 18 start/end-anchored patterns (greetings, closings, restatements, filler transitions) |
+| URL shortening | Strips query params and hash from URLs over 100 chars |
+| Conservative guard | Returns original if compressed output is longer |
+
+All stages are try/catch wrapped — failures silently fall through with the original text.
 
 ---
 
 ## TUI Status Bar
 
-When enabled, OpenToken displays a real-time status bar in the prompt area:
+When enabled, OpenToken displays a minimal clock widget in the prompt area:
 
 ```
-🌸 opentoken saved 2.4K tokens   1h 23m  14:32
+14:32
 ```
 
-- **Token savings** — cumulative for the current session
-- **Duration** — elapsed session time
-- **Clock** — current time, updates every second
+The widget updates every second. It replaces the prior stats-heavy display (removed to save tokens on the TUI slot itself).
 
-Disable with `"enableTui": false` in `config.json`.
+Disable with `"enableTui": false` in `config.json`. Switch to ASCII-only with `"tuiUseEmoji": false`.
 
 ---
 
@@ -340,7 +243,7 @@ Disable with `"enableTui": false` in `config.json`.
 
 | Rule | Behavior |
 |---|---|
-| **Short output bypass** | <80 lines or <20 KB → pass through unchanged |
+| **Short output bypass** | `<80 lines or <2 KB` → pass through unchanged |
 | **Conservative comparison** | If filtered output ≥ original size → return original |
 | **Secrets-first** | Redacted BEFORE any other processing (33 patterns compiled to single alternation regex) |
 | **Binary detection** | NUL byte scan on first 64 KB → suppress or extract text |
@@ -353,74 +256,118 @@ Disable with `"enableTui": false` in `config.json`.
 
 ## Diagnostics
 
-Two MCP tools are available for debugging and monitoring.
+OpenToken exposes status and error metrics through stderr and files.
 
-### `opentoken_stats`
+### Opentoken Stats
 
-Shows per-session token savings summary. Supports optional time-based filtering:
+Session-level summary of all metrics to date:
 
-```
-🌸 opentoken stats
-
-  Calls:        142
-  Tokens in:    48.2K
-  Tokens out:   3.1K
-  Tokens saved: 45.1K (94%)
-
-  By tool:
-    read           89 calls  saved  42.3K ( 96%)
-    bash           45 calls  saved   2.7K ( 72%)
-    grep            8 calls  saved    89 ( 45%)
+```bash
+~/.config/opentoken/stats-summary.json
+opentoken stats
 ```
 
-Filter by session: `opentoken_stats({ since: "all" })` to aggregate across all sessions.
+### Error Log
 
-### `opentoken_health`
+If `enableMetrics` is on, per-call data is appended to:
 
-Shows plugin health — error counts, stage failures, and config status:
-
+```bash
+~/.config/opentoken/metrics.jsonl
 ```
-🌸 opentoken health check
 
-  Total errors: 0
-  No errors recorded ✅
+Each line is a JSON object with `ts`, `tool`, `family`, `before_tokens`, `after_tokens`, `saved_pct`, `sessionID`, and `role`.
 
-  Config: metrics=true, symbols=true
-  Context: lean
+### Session History
+
+Session memory (if enabled) is stored in:
+
+```bash
+~/.config/opentoken/session-memory.json
 ```
 
 ---
 
 ## Data Storage
 
-All state is stored in `~/.config/opentoken/`:
-
-| File | Purpose | Cleanup |
+| File | Path | Purpose |
 |---|---|---|
-| `metrics.jsonl` | Per-call metrics (tool, family, tokens before/after, savings %) | Rotated at 10 MB, keeps 5 files |
-| `error.jsonl` | Pipeline stage failure traces | Rotated at 5 MB, keeps 3 files |
-| `stats-summary.json` | Aggregated statistics summary | Overwritten on each `opentoken_stats` call |
-| `session-memory.json` | Previous session summary for cross-session injection | Overwritten each session |
-| `offload/` | Progressive disclosure temp files | Auto-cleaned after 1 hour |
-| `rewind/` | Reversible compression hash store | Auto-cleaned after 1 hour |
-| `index/symbols.json` | Code symbol index cache | Overwritten each session |
+| Config | `~/.config/opentoken/config.json` | User settings |
+| Metrics | `~/.config/opentoken/metrics.jsonl` | Per-call token savings (rotated at 10 MB, keeps 5) |
+| Errors | `~/.config/opentoken/error.jsonl` | Pipeline failures |
+| Symbol index | `~/.config/opentoken/symbol-index.json` | Cached code symbol index |
+| Session start | `~/.config/opentoken/session-start.json` | Last session ID and start time |
+| Memory | `~/.config/opentoken/session-memory.json` | Cross-session memory (opt-in) |
+| Rewind store | `~/.config/opentoken/rewind/*.tmp` | Reversible compression offload files |
+| Progressive store | `~/.config/opentoken/progressive/*.tmp` | Progressive disclosure offload files |
 
-File permissions: `0o600` for data files, `0o700` for directories.
+All files use `0o600` permissions, directories use `0o700`.
 
 ---
 
 ## Security
 
-OpenToken is designed with defense-in-depth:
+- **Secrets redaction** — 33+ patterns including AWS keys, GitHub tokens, OpenAI/Anthropic keys, JWTs, private keys, connection strings, and bearer tokens
+- **Secrets run first** — redaction is the very first pipeline stage; no other transformation touches raw output before redaction
+- **No exec/eval** — no dynamic code execution of any kind; all pipelines are pure function chains
+- **No telemetry** — OpenToken never phones home. All data stays local
+- **Safe file handling** — atomic tmp+rename writes, restricted permissions, path traversal protection
+- **Graceful failure** — every stage wrapped in try/catch; plugin never breaks the host process
 
-- **Path traversal protection** — File paths are validated to resolve within the project directory
-- **Input validation** — Tool names are whitelisted and sanitized
-- **Output size limits** — Prevents memory exhaustion from oversized tool outputs
-- **Graceful degradation** — Every pipeline stage is wrapped in error handling; a single failure never crashes the session
-- **Secret redaction** — Runs first in every pipeline, before any other processing (33 patterns compiled into a single alternation regex for performance)
-- **SHA256 checksum verification** — `install.sh` downloads to a temp tarball, computes SHA256, and supports `--sha256 <hash>` for automatic integrity verification
-- **File permission hardening** — Session state, metrics, and error files are created with `0o600` (owner-only read/write); config directories use `0o700`
-- **Reproducible dependencies** — `bun.lock` locks exact dependency versions for reproducible installs, preventing supply chain changes between commits
+---
+
+## Architecture Reference
+
+```
+src/
+├── index.ts                 Plugin entry, pipeline orchestration, hook registration
+├── outputcomp.ts            Output compression pipeline (boilerplate, whitespace, URL shortening)
+├── precall.ts               Pre-call filters: command rewriting, minified file blocking, size caps
+├── postcall.ts              Post-call processors: binary detection, JSON minify, key alias, TOON, logs, tables
+├── ltsc.ts                  Lossless Token Sequence Compression (LZ77-style)
+├── lzw.ts                   LZW token substitution compression
+├── folding.ts               Diff + log folding
+├── dedup.ts                 Cross-call deduplication
+├── autoescalate.ts          Progressive compression as context fills
+├── progressive.ts           Summary-first output, full on demand
+├── rewind.ts                Reversible compression + semantic abbreviation
+├── skeleton.ts              AST skeleton extraction
+├── symbolindex.ts           Code symbol index and query
+├── toon.ts                  JSON-to-tabular format conversion
+├── memory.ts                Session memory persistence
+├── router.ts                Content-aware compression router
+├── lspfirst.ts              LSP-first enforcement
+├── jsonsample.ts            JSON statistical sampling
+├── statusline.ts            Session summary builder
+├── tui.tsx                  TUI clock widget (Solid.js)
+├── session.ts               Session state tracking + memory
+│
+├── families/
+│   ├── detect.ts            Command family detection
+│   ├── git.ts               git diff/log/status filters
+│   ├── npm.ts               npm install/test filters
+│   ├── cargo.ts             cargo build/test filters
+│   ├── test.ts              go test / pytest filters
+│   ├── fs.ts                find/ls/tree filters
+│   ├── docker.ts            docker build/pull/push filters
+│   ├── make.ts              make/cmake compilation progress filters
+│   ├── pip.ts               pip install RLE collapse
+│   └── generic.ts           Fallback generic compression
+│
+├── filters/
+│   ├── read.ts              Read output filters (skeleton extraction)
+│   ├── grep.ts              Grep output dedup
+│   └── glob.ts              Glob output dedup
+│
+└── utils/
+    ├── secrets.ts           Secret redaction (33+ patterns)
+    ├── tokens.ts            Token estimation utilities
+    ├── metrics.ts           Metrics recording (JSONL, rotation at 10MB)
+    ├── stats.ts             Stats aggregation and summaries
+    ├── cache.ts             LRU cache for read outputs
+    ├── errors.ts            Error logging
+    ├── session-store.ts     Session-scoped state store (30-min TTL, max 10)
+    └── ...other utilities
+```
 
 ---
 
@@ -429,71 +376,50 @@ OpenToken is designed with defense-in-depth:
 ### Setup
 
 ```bash
-git clone https://github.com/MrGray17/opentoken.git
+git clone <repo>
 cd opentoken
 bun install
 ```
 
-### Testing
+### Commands
+
+| Command | Description |
+|---|---|
+| `bun test` | Run all tests (Bun test runner) |
+| `bun run typecheck` | TypeScript strict check (`tsc --noEmit`) |
+| `bun run lint` | Biome check (tabs, double quotes, imports) |
+| `bun run lint:fix` | Auto-fix with Biome |
+| `bun run format` | Biome format (tabs, double quotes) |
+| `bun run checks:regex` | ReDoS pattern scan |
+
+### CI Pipeline
+
+```
+typecheck → lint → checks:regex → test
+```
+
+### Testing Conventions
+
+- Bun test runner: `import { describe, expect, it } from "bun:test"`
+- No `test.skip` / `it.skip` / `.only` in committed code
+- Tests import modules directly from `src/` — no build step needed
+
+### Linking Locally
 
 ```bash
-bun test           # Run all tests
-bun test --watch   # Watch mode
+cp -r .opencode/ ~/.config/opencode/plugins/opentoken
 ```
 
-### Type checking
+The `.opencode/plugins/opentoken/` directory mirrors `src/` for distribution. Keep it in sync.
 
-```bash
-bun run typecheck  # tsc --noEmit
-```
+### Important Gotchas
 
-### Code structure
-
-```
-src/
-├── index.ts              Plugin entry, pipeline orchestration
-├── precall.ts            Pre-execution command rewriting and validation
-├── postcall.ts           Post-execution output cleaning and compression
-├── router.ts             Content-aware compression stage routing
-├── session.ts            Per-session state and metrics tracking
-├── folding.ts            Diff and log line folding
-├── dedup.ts              Cross-call output deduplication
-├── lzw.ts                LZW token substitution compression
-├── ltsc.ts               Lossless Token Sequence Compression (LZ77-style)
-├── progressive.ts        Large output offloading with summary pointers
-├── autoescalate.ts       Context-pressure-based compression escalation
-├── toon.ts               JSON-to-tabular format conversion
-├── history.ts            Conversation history compression
-├── memory.ts             Cross-session persistent memory
-├── skeleton.ts           AST skeleton extraction for file reads
-├── symbolindex.ts        Codebase symbol index
-├── jsonsample.ts         JSON statistical sampling
-├── rewind.ts             Reversible aggressive compression
-├── lspfirst.ts           LSP-first enforcement for code queries
-├── statusline.ts         Token savings status line
-├── tui.tsx               TUI status bar widget (Solid.js)
-├── families/             Command-family-specific output filters
-│   ├── git.ts, npm.ts, cargo.ts, test.ts, fs.ts
-│   ├── docker.ts, pip.ts, make.ts, generic.ts
-│   └── detect.ts
-├── filters/              Tool-specific output filters
-│   ├── read.ts, grep.ts, glob.ts
-└── utils/                Shared utilities
-    ├── secrets.ts, tokens.ts, cache.ts
-    ├── metrics.ts, stats.ts, errors.ts
-    └── session-store.ts
-```
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Make your changes
-4. Run tests (`bun test`) and type checking (`bun run typecheck`)
-5. Open a pull request
+- **`CONTRIBUTING.md` is stale** — lists `families/bash.ts` and `filters/compile.ts` which don't exist. Current files match the architecture tree above.
+- **Lockfiles**: only `bun.lock` is tracked; `package-lock.json` is gitignored.
+- **Biome**: tab indentation, double quotes, `organizeImports` on assist.
 
 ---
 
 ## License
 
-[MIT](LICENSE) © MrGray17
+MIT

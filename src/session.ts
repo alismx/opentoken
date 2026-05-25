@@ -114,6 +114,7 @@ interface SessionTracker {
 	gitEvents: string[];
 	toolCalls: number;
 	tokensSaved: number;
+	outputTokensSaved: number;
 }
 
 function createSessionTracker(): SessionTracker {
@@ -123,6 +124,7 @@ function createSessionTracker(): SessionTracker {
 		gitEvents: [],
 		toolCalls: 0,
 		tokensSaved: 0,
+		outputTokensSaved: 0,
 	};
 }
 
@@ -152,6 +154,10 @@ export function trackTokensSaved(sessionID: string, saved: number): void {
 	getTracker(sessionID).tokensSaved += saved;
 }
 
+export function trackOutputTokensSaved(sessionID: string, saved: number): void {
+	getTracker(sessionID).outputTokensSaved += saved;
+}
+
 export function getSessionTracker(sessionID: string): SessionTracker {
 	const t = getTracker(sessionID);
 	return {
@@ -160,6 +166,7 @@ export function getSessionTracker(sessionID: string): SessionTracker {
 		gitEvents: [...t.gitEvents],
 		toolCalls: t.toolCalls,
 		tokensSaved: t.tokensSaved,
+		outputTokensSaved: t.outputTokensSaved,
 	};
 }
 
