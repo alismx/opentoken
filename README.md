@@ -19,7 +19,8 @@
 
 - [Real Production Numbers](#real-production-numbers)
 - [How It Works](#how-it-works)
-- [Features](#features)
+- [Why OpenToken?](#why-opentoken)
+- [Compression Layers](#compression-layers)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [Output Saving](#output-saving)
@@ -81,35 +82,92 @@ Model response ──→ [ Output pipeline ] ──→ trimmed response
 
 **Input pipeline** — intercepts every tool output (read, bash, grep, glob) and runs it through 30+ compression stages: secret redaction, binary detection, thinking-block stripping, key aliasing, TOON conversion, minification, LTSC/LZW compression, deduplication, progressive disclosure, and more. Each stage ends with a conservative length guard: if output grew, the original is returned.
 
-**Output pipeline** — caps model response length via `maxOutputTokens`, injects a conciseness directive into the system prompt, and post-processes completed responses to strip thinking blocks, ANSI codes, boilerplate phrases, and shorten URLs. Also applied: LTSC and LZW lossless compression — all under the same 0-risk conservative filter.
+**Output pipeline** — caps model response length via `maxOutputTokens`, injects a conciseness directive into the system prompt, and post-processes completed responses to strip thinking blocks, ANSI codes, boilerplate phrases, and shorten URLs — all under the same 0-risk conservative filter.
 
 ---
 
-## Features
+## Why OpenToken?
 
-### Input Pipeline (tool outputs)
-- **Secret redaction** — 33+ patterns compiled into a single alternation regex, runs before any other processing
-- **Binary detection** — 64 KB NUL byte scan; extracts UTF-8 text or suppresses entirely
-- **Thinking block stripping** — `<antThinking>`, `<thinking>`, `<reasoning>`, `<scratchpad>`, `<inner_monologue>`
-- **JSON minification** — lossless whitespace removal from JSON output
-- **Key aliasing** — maps 80+ long JSON keys to short aliases (`description` → `desc`)
-- **TOON format** — JSON arrays of objects → tabular CSV-like format. 40–50% savings
-- **LTSC + LZW compression** — LZ77-style + dictionary compression for repetitive content
-- **AST skeleton extraction** — replaces full file reads with structural signatures (functions, classes, imports). ~88% reduction
-- **Log noise normalization** — replaces timestamps, PIDs, elapsed times with static placeholders
-- **Progressive disclosure** — large outputs offloaded to temp file + summary pointer
-- **Family-specific filters** — 8 specialized handlers for git, npm, cargo, test, fs, docker, pip, make
-- **Auto-escalation** — ratchets compression intensity as context fills (50% → LEAN, 70% → ULTRA, 85% → CEILING)
+There's no shortage of token-saving tools for AI coding assistants. Here's where OpenToken stands apart:
 
-### Output Pipeline (model responses)
-- **System conciseness directive** — appended to system prompt to encourage brevity
-- **Output budget cap** — `maxOutputTokens` set to 4096 by default
-- **Response compression** — boilerplate elimination (18 start/end-anchored patterns), thinking block stripping, ANSI stripping, whitespace normalization, URL shortening
-- **Lossless token compression** — LTSC + LZW applied to response text
-- **Metrics tracking** — per-response token savings recorded when metrics are enabled
+| Factor | OpenToken | DCP | Caveman | RTK |
+|---|---|---|---|---|
+| **Input compression** (tool outputs) | ✅ **35 layers** — AST skeletons, key aliasing, TOON, LTSC/LZW, family filters, progressive disclosure | ❌ Context pruning only | ❌ Not touched | ⚠️ Basic CLI output |
+| **Output compression** (model responses) | ✅ **7 layers** — directive, budget cap, boilerplate strip, thinking block strip, URL shorten | ❌ | ✅ But changes model's tone to "caveman speak" | ❌ |
+| **Readable output** | ✅ **Full preservation** — model speaks normally, boilerplate stripped post-hoc | ✅ | ❌ "Me fix bug. Use function." — professional teams reject this | ✅ |
+| **Zero risk** | ✅ Every stage: if output grew, original returned | ✅ | ❌ Style change is irreversible | ✅ |
+| **Transparent** | ✅ Model unaware — no behavioral change | ✅ | ❌ Requires user to enable /caveman mode | ✅ |
+| **Single plugin** | ✅ Does it all | ❌ Must stack 3–5 tools | ❌ Must stack with others | ❌ Must stack |
 
-### Zero Risk Guarantee
-Every transformation ends with a conservative comparison — if the filtered output is longer than or equal to the original, the original is returned untouched. No surprises.
+**The Caveman problem**: Caveman saves 50–75% on output tokens by making the model speak in fragments — *"Me fix bug. Use function."* This is unacceptable in professional settings: code reviews, client deliverables, documentation. OpenToken saves output tokens without changing *how* the model communicates. Greetings get stripped, closings get trimmed, thinking blocks removed, URLs shortened — but the prose stays natural.
+
+**The stacking problem**: Medium articles boast "90% savings" by stacking 5 tools (CBM + context-mode + RTK + Headroom + Caveman). That's 5 installs, 5 configs, 5 potential failure points. OpenToken alone covers input AND output compression in a single plugin.
+
+---
+
+## Compression Layers
+
+### Input Pipeline — 35 layers on tool outputs
+
+OpenToken applies up to **35 distinct compression layers** depending on content type and tool. Each layer is independently configured, fail-safe, and conservative.
+
+| # | Layer | Module | What It Does |
+|---|---|---|---|
+| L1 | Command rewrite | `precall.ts` | Auto-adds `--silent`, `--quiet`, `--oneline` to 17+ command types |
+| L2 | Minified file block | `precall.ts` | Skips reads of `.min.js`, `dist/`, `build/`, `node_modules/`, lock files |
+| L3 | Size caps | `precall.ts` | Blocks writes >50 KB, edits >20 KB |
+| L4 | Secret redaction | `utils/secrets.ts` | Redacts 33+ patterns (API keys, tokens, passwords, JWTs) |
+| L5 | LSP-first enforcement | `lspfirst.ts` | Blocks grep/glob on code symbol patterns; routes to LSP tools |
+| L6 | Family-specific filters | `families/*.ts` | 8 specialized filters (git, npm, cargo, test, fs, docker, pip, make) |
+| L7 | Tool-specific compression | `filters/*.ts` | Read skeleton outlines, grep dedup, glob noise removal |
+| L8 | Binary detection | `postcall.ts` | 64 KB NUL byte scan; extracts UTF-8 text or suppresses |
+| L9 | Output suppression | `postcall.ts` | Blocks output >100 KB entirely |
+| L10 | Thinking block stripping | `postcall.ts` | Removes `<antThinking>`, `<reasoning>`, `<scratchpad>`, `<inner_monologue>` |
+| L11 | Whitespace/null cleanup | `postcall.ts` | Strips null values, empty objects/arrays, timestamps, hashes |
+| L12 | Key aliasing | `postcall.ts` | Maps 80+ long JSON keys to short aliases (`description` → `desc`) |
+| L13 | URL shortening | `postcall.ts` | Strips query parameters and hash from URLs >100 chars |
+| L14 | Base64 stripping | `postcall.ts` | Replaces inline `data:...;base64,...` with short placeholder |
+| L15 | Cross-call dedup | `dedup.ts` | Identical/similar output within 16-call window → single reference line |
+| L16 | Progressive disclosure | `progressive.ts` | Large output (>80 lines, >8 KB) offloaded to temp file + summary pointer |
+| L17 | Auto-escalation | `autoescalate.ts` | Ratchets compression intensity as context fills (50% → LEAN, 70% → ULTRA, 85% → CEILING) |
+| L18 | AST skeleton extraction | `skeleton.ts` | Replaces full file reads with structural signatures (functions, classes, imports). ~88% reduction |
+| L19 | Diff folding | `folding.ts` | Collapses unchanged diff context lines |
+| L20 | Log folding | `folding.ts` | Collapses repeated log lines (Python, K8s, syslog formats) |
+| L21 | JSON statistical sampling | `jsonsample.ts` | Large JSON arrays → schema discovery + representative samples |
+| L22 | Reversible compression | `rewind.ts` | Aggressive head(10)+tail(5) extraction; full original stored on disk for retrieval |
+| L23 | Content-aware router | `router.ts` | Detects content type (code, json, diff, log, etc.) → fires only relevant stages |
+| L24 | Stack trace compression | `postcall.ts` | Detects stack frames; collapses middle frames, keeps top + bottom |
+| L25 | Symbol index | `symbolindex.ts` | Background codebase indexing at session start — enables symbol-based queries |
+| L26 | Session memory | `memory.ts` | Persists previous session summary; injects top-3 relevant on restart |
+| L27 | TOON format conversion | `toon.ts` | JSON arrays of objects → tabular CSV-like format. 40–50% savings |
+| L28 | Whitespace normalization | `postcall.ts` | Collapses 3+ newlines, strips trailing whitespace, normalizes tabs |
+| L29 | Log noise normalization | `postcall.ts` | Replaces timestamps, PIDs, elapsed times with static placeholders |
+| L30 | Table minimization | `postcall.ts` | Strips padding/alignment from CLI tables |
+| L31 | JSON minification | `postcall.ts` | Lossless whitespace removal from JSON output |
+| L32 | ANSI escape stripping | `postcall.ts` | Removes terminal color codes and control sequences |
+| L33 | LTSC (Lossless Token Sequence Compression) | `ltsc.ts` | LZ77-style — finds repeated substrings, replaces with dictionary meta-tokens. 18–27% savings |
+| L34 | LZW token substitution | `lzw.ts` | Dictionary compression for repetitive content (stack traces, error logs) |
+| L35 | Cross-tool dedup | `dedup.ts` | Identical content from different tools → single reference |
+
+> **Conservative filter**: Every pipeline ends with a comparison — if filtered output ≥ original size, the original is returned untouched.
+
+### Output Pipeline — response compression
+
+When `enableOutputSaving` is true (default), model responses pass through an additional pipeline:
+
+| # | Layer | Module | What It Does |
+|---|---|---|---|
+| L36 | System conciseness directive | `outputcomp.ts` | Appends brevity instruction to system prompt — prevents verbosity before generation |
+| L37 | Output budget cap | `outputcomp.ts` | Sets `maxOutputTokens` to 4096; limits maximum response length |
+| L38 | Thinking block stripping | `outputcomp.ts` | Removes `<antThinking>`, `<thinking>`, `<reasoning>` blocks from responses |
+| L39 | ANSI escape stripping | `outputcomp.ts` | Strips color codes and terminal control sequences |
+| L40 | Whitespace normalization | `outputcomp.ts` | Collapses 3+ newlines, strips trailing whitespace |
+| L41 | Boilerplate elimination | `outputcomp.ts` | 18 start/end-anchored patterns — greets, closings, restatements, filler transitions |
+| L42 | URL shortening | `outputcomp.ts` | Strips query params and hash from URLs over 100 chars |
+
+> **Output pipeline is zero-risk**: Each comparison checks compressed length vs original; if it grew, the original response is returned untouched.
+
+---
 
 ---
 
