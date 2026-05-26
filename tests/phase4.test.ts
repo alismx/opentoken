@@ -8,7 +8,6 @@ import {
 import { filterGeneric } from "../src/families/generic";
 import { detectAndHandleBinary, shortenUrls } from "../src/postcall";
 import { isMinifiedOrGenerated } from "../src/precall";
-import { progressiveDisclosure } from "../src/progressive";
 
 const TEST_SESSION = "phase4-test";
 

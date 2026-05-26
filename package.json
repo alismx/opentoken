@@ -49,7 +49,7 @@
     "typecheck": "tsc --noEmit",
     "checks:regex": "bun run scripts/check-regex-safety.ts",
     "lint": "biome check src/",
-    "lint:fix": "biome check --apply src/",
+    "lint:fix": "biome check --write src/",
     "format": "biome format --write src/"
   },
   "dependencies": {

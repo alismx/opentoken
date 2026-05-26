@@ -14,6 +14,7 @@ import {
 	resetEscalation,
 	updateContext,
 } from "./autoescalate";
+import { isStageWorthwhile } from "./autotune";
 import { deduplicate, resetDedup } from "./dedup";
 import { filterCargoOutput } from "./families/cargo";
 import { detectFamily } from "./families/detect";
@@ -45,7 +46,6 @@ import {
 	buildMemoryPrompt,
 	extractContextKeywords,
 	getMemoryStats,
-	getRelevantSummaries,
 	writeSessionSummary,
 } from "./memory";
 import {
@@ -397,7 +397,6 @@ interface ToolOutputAfter {
 // Hard truncation cap stays at SHORT_OUTPUT_THRESHOLD (80) in the generic filter.
 // This split ensures medium outputs (40-80 lines) get cleaned without risk of truncation.
 const LOSSLESS_LINE_THRESHOLD = 40;
-const _SHORT_OUTPUT_THRESHOLD = 80;
 const MAX_OUTPUT_LENGTH = 20000;
 
 function shouldSkipFilter(output: string): boolean {
@@ -703,20 +702,25 @@ async function applyBashFilter(
 	);
 
 	// LTSC: Lossless Token Sequence Compression (LZ77-style, 18-27% savings)
-	const ltsc = safeStage("compressLTSC", () => compressLTSC(filtered), {
-		compressed: false,
-		result: filtered,
-		savings: 0,
-	});
-	if (ltsc.compressed) filtered = ltsc.result;
+	// Only run if autotune says it's worthwhile for this command family
+	if (isStageWorthwhile(family)) {
+		const ltsc = safeStage("compressLTSC", () => compressLTSC(filtered), {
+			compressed: false,
+			result: filtered,
+			savings: 0,
+		});
+		if (ltsc.compressed) filtered = ltsc.result;
+	}
 
 	// LZW: Token substitution for repetitive content (stack traces, error logs)
-	const lzw = safeStage("compressLZW", () => compressLZW(filtered), {
-		compressed: false,
-		result: filtered,
-		savings: 0,
-	});
-	if (lzw.compressed) filtered = lzw.result;
+	if (isStageWorthwhile(family, 0.05)) {
+		const lzw = safeStage("compressLZW", () => compressLZW(filtered), {
+			compressed: false,
+			result: filtered,
+			savings: 0,
+		});
+		if (lzw.compressed) filtered = lzw.result;
+	}
 
 	return conservativeFilter(output, filtered);
 }
@@ -1592,27 +1596,22 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
 					output.system.push(getConcisenessDirective());
 				}
 
-				if (!config.enableHistoryCompression) return;
-
-				// Inject session memory if enabled
+				// Inject session memory if enabled — fires independently of history compression
 				if (config.enableSessionMemory) {
 					const stats = getMemoryStats();
-					if (stats.total > 0) {
-						// Extract keywords from the latest user message
-						const latestUserMsg = input as { message?: { content?: string } };
-						const keywords = latestUserMsg?.message?.content
-							? extractContextKeywords(latestUserMsg.message.content)
+					if (stats.total > 0 && directory) {
+						const msg = input as { message?: { content?: string } };
+						const keywords = msg?.message?.content
+							? extractContextKeywords(msg.message.content)
 							: [];
-
-						const relevant = getRelevantSummaries(directory, keywords, 3);
-						if (relevant.length > 0) {
-							const memoryPrompt = buildMemoryPrompt(relevant);
-							if (memoryPrompt) {
-								output.system.push(memoryPrompt);
-							}
+						const memoryPrompt = buildMemoryPrompt(directory, keywords);
+						if (memoryPrompt) {
+							output.system.push(memoryPrompt);
 						}
 					}
 				}
+
+				if (!config.enableHistoryCompression) return;
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
 				console.error(`[OpenToken] chat.system.transform error: ${msg}`);

@@ -1,43 +1,47 @@
 // OpenToken — Test Suite
 // Validates all 24 layers work correctly
 
-import { afterEach, describe, expect, it } from "bun:test";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const TEST_SESSION = "test-session";
 
 import {
-	applyAutoEscalation,
 	deescalate,
 	getCompressionLevel,
 	resetEscalation,
 	updateContext,
 } from "../src/autoescalate";
-import { deduplicate, resetDedup } from "../src/dedup";
-import { filterCargoBuild, filterCargoTest } from "../src/families/cargo";
-import { detectFamily } from "../src/families/detect";
-import { filterFind, filterLs, filterTree } from "../src/families/fs";
-import { filterGeneric } from "../src/families/generic";
 import {
-	filterGitDiff,
-	filterGitLog,
-	filterGitStatus,
-} from "../src/families/git";
+	getFamilyEffectiveness,
+	isStageWorthwhile,
+	resetCache,
+} from "../src/autotune";
+import { deduplicate, resetDedup } from "../src/dedup";
+import { filterCargoBuild } from "../src/families/cargo";
+import { detectFamily } from "../src/families/detect";
+import { filterFind, filterLs } from "../src/families/fs";
+import { filterGeneric } from "../src/families/generic";
+import { filterGitDiff, filterGitStatus } from "../src/families/git";
 import { filterNpmInstall, filterNpmTest } from "../src/families/npm";
-import { filterGoTest, filterPytest } from "../src/families/test";
+import { filterPytest } from "../src/families/test";
 import { filterGlob } from "../src/filters/glob";
 import { filterGrep } from "../src/filters/grep";
 import { filterRead } from "../src/filters/read";
-import { foldDiff, foldDiffAndLogs, foldLogs } from "../src/folding";
+import { foldDiff, foldLogs } from "../src/folding";
 import { sampleJson } from "../src/jsonsample";
-import {
-	shouldBlockGlob,
-	shouldBlockGrep,
-	shouldBlockShellGrep,
-} from "../src/lspfirst";
+import { shouldBlockGrep, shouldBlockShellGrep } from "../src/lspfirst";
+import { compressLTSC, decompressLTSC } from "../src/ltsc";
 import { compressLZW, decompressLZW } from "../src/lzw";
+import {
+	buildMemoryPrompt,
+	clearMemory,
+	extractContextKeywords,
+	getMemoryStats,
+	writeSessionSummary,
+} from "../src/memory";
 import {
 	aliasJsonKeys,
 	cleanWhitespaceAndNulls,
@@ -56,9 +60,7 @@ import {
 	preCallFilter,
 	rewriteCommand,
 } from "../src/precall";
-import { cleanupOffloaded, progressiveDisclosure } from "../src/progressive";
-import { applyReversibleCompression, cleanupRewind } from "../src/rewind";
-import { analyzeContent, getCompressionPipeline } from "../src/router";
+import { analyzeContent } from "../src/router";
 // Phase 2 imports
 import { extractSkeleton } from "../src/skeleton";
 import {
@@ -66,7 +68,6 @@ import {
 	generateStatusLine,
 	resetStatusLine,
 } from "../src/statusline";
-import { indexDirectory, loadIndex } from "../src/symbolindex";
 import { redactSecrets } from "../src/utils/secrets";
 import { estimateTokens } from "../src/utils/tokens";
 
@@ -547,7 +548,7 @@ describe("L21: Content Router", () => {
 
 describe("L23: Symbol Index", () => {
 	it("extracts symbols from TypeScript content", async () => {
-		const content = `import React from 'react'
+		const _content = `import React from 'react'
 
 export interface User {
   name: string
@@ -763,6 +764,44 @@ at async Promise.all (index 0)`;
 		const input = "line1\nline2\nline3\nline4";
 		const result = compressLZW(input);
 		// Short lines don't meet minimum substring length
+		expect(result.compressed).toBe(false);
+	});
+});
+
+describe("L33: LTSC Lossless Token Sequence Compression", () => {
+	it("compresses repeated substrings", () => {
+		const input =
+			"1234567890abc 1234567890abc 1234567890abc 1234567890abc 1234567890abc";
+		const result = compressLTSC(input);
+		expect(result.compressed).toBe(true);
+		expect(decompressLTSC(result.result)).toBe(input);
+	});
+	it("does not compress unique content", () => {
+		const input = "Hello world, this is unique content with no repetition";
+		const result = compressLTSC(input);
+		expect(result.compressed).toBe(false);
+		expect(result.result).toBe(input);
+	});
+	it("handles lossless roundtrip for repetitive log output", () => {
+		const input = `[INFO] Task started at 12:00:01
+[INFO] Task processing module A
+[INFO] Task completed at 12:00:05
+[INFO] Task started at 12:00:10
+[INFO] Task processing module B
+[INFO] Task completed at 12:00:15`;
+		const result = compressLTSC(input);
+		// Roundtrip must be lossless
+		expect(decompressLTSC(result.result)).toBe(input);
+	});
+	it("skips oversized input (>50KB)", () => {
+		const input = "a".repeat(60_000);
+		const result = compressLTSC(input);
+		expect(result.compressed).toBe(false);
+		expect(result.result).toBe(input);
+	});
+	it("preserves content with no repetition at all", () => {
+		const input = "The quick brown fox jumps over the lazy dog.";
+		const result = compressLTSC(input);
 		expect(result.compressed).toBe(false);
 	});
 });
@@ -1033,7 +1072,7 @@ describe("Error Logging", () => {
 			fs.writeFileSync(ERROR_FILE, "");
 		} catch {}
 	});
-	it("logs an error entry", () => {
+	it("logs an error entry without throwing", () => {
 		logError({
 			ts: new Date().toISOString(),
 			stage: "testStage",
@@ -1041,7 +1080,8 @@ describe("Error Logging", () => {
 			error: "Test error message",
 			recoverable: true,
 		});
-		expect(true).toBe(true);
+		const summary = getErrorSummary();
+		expect(summary.total).toBeGreaterThan(0);
 	});
 	it("returns error summary", () => {
 		logError({
@@ -1055,5 +1095,154 @@ describe("Error Logging", () => {
 		expect(summary).toHaveProperty("total");
 		expect(summary).toHaveProperty("byStage");
 		expect(summary).toHaveProperty("recent");
+	});
+});
+
+describe("Autotune — Metrics-Driven Gating", () => {
+	afterEach(() => {
+		resetCache();
+	});
+
+	it("returns 1.0 when no metrics file exists", () => {
+		expect(getFamilyEffectiveness("nonexistent")).toBe(1.0);
+	});
+
+	it("gates correctly for neutral families with no data", () => {
+		expect(isStageWorthwhile("git")).toBe(true);
+		expect(isStageWorthwhile("npm")).toBe(true);
+		expect(isStageWorthwhile("cargo")).toBe(true);
+	});
+
+	it("gates by threshold — no data returns true for standard threshold", () => {
+		expect(isStageWorthwhile("generic")).toBe(true);
+		expect(isStageWorthwhile("generic", 0.5)).toBe(true);
+	});
+
+	it("returns false for impossible threshold even with no data", () => {
+		expect(isStageWorthwhile("generic", 2.0)).toBe(false);
+	});
+});
+
+describe("Memory — Cross-Session Facts", () => {
+	const MEMORY_PATH = path.join(
+		os.homedir(),
+		".config",
+		"opencode",
+		"token",
+		"MEMORY.md",
+	);
+
+	beforeEach(() => {
+		try {
+			if (fs.existsSync(MEMORY_PATH)) fs.unlinkSync(MEMORY_PATH);
+		} catch {}
+	});
+
+	afterEach(() => {
+		try {
+			if (fs.existsSync(MEMORY_PATH)) fs.unlinkSync(MEMORY_PATH);
+		} catch {}
+	});
+
+	it("extractContextKeywords filters stop words and limits to 10", () => {
+		const result = extractContextKeywords(
+			"the quick brown fox jumps over lazy dog about testing compression",
+		);
+		expect(result.length).toBeLessThanOrEqual(10);
+		expect(result).not.toContain("the");
+		expect(result).not.toContain("about");
+		expect(result).toContain("quick");
+		expect(result).toContain("compression");
+	});
+
+	it("extractContextKeywords returns empty for stop-word-only input", () => {
+		const result = extractContextKeywords("the and for are but not");
+		expect(result.length).toBe(0);
+	});
+
+	it("getMemoryStats returns zero when no memory file exists", () => {
+		const stats = getMemoryStats();
+		expect(stats.total).toBe(0);
+		expect(stats.oldest).toBe("none");
+	});
+
+	it("writeSessionSummary creates a fact and getMemoryStats reflects it", () => {
+		writeSessionSummary(
+			"s1",
+			"/projects/opentoken",
+			"Fixed compression bug in src/ltsc.ts with new algorithm",
+		);
+		const stats = getMemoryStats();
+		expect(stats.total).toBeGreaterThan(0);
+		expect(stats.byProject).toHaveProperty("opentoken");
+	});
+
+	it("clearMemory removes the memory file", () => {
+		writeSessionSummary("s1", "/projects/test", "Some test summary");
+		expect(getMemoryStats().total).toBeGreaterThan(0);
+		clearMemory();
+		const stats = getMemoryStats();
+		expect(stats.total).toBe(0);
+	});
+
+	it("buildMemoryPrompt returns prompt for matching project", () => {
+		writeSessionSummary("s1", "/projects/foo", "Added feature in src/bar.ts");
+		writeSessionSummary("s2", "/projects/foo", "Fixed bug in src/baz.ts");
+		const prompt = buildMemoryPrompt("/projects/foo");
+		expect(prompt).toContain("Previous context:");
+		expect(prompt).toContain("foo:");
+	});
+
+	it("buildMemoryPrompt returns empty for unknown project", () => {
+		const prompt = buildMemoryPrompt("/projects/nonexistent");
+		expect(prompt).toBe("");
+	});
+
+	it("writeSessionSummary keeps distinct facts as separate entries", () => {
+		writeSessionSummary(
+			"s1",
+			"/projects/dedup",
+			"Added new feature and fixed authentication module bug",
+		);
+		writeSessionSummary(
+			"s2",
+			"/projects/dedup",
+			"Fixed rendering bug in frontend component",
+		);
+		const stats = getMemoryStats();
+		expect(stats.total).toBe(2);
+	});
+
+	it("writeSessionSummary deduplicates nearly identical facts", () => {
+		writeSessionSummary(
+			"s1",
+			"/projects/neardup",
+			"fixed authentication module feature",
+		);
+		writeSessionSummary(
+			"s2",
+			"/projects/neardup",
+			"fixed authentication module feature bug",
+		);
+		const stats = getMemoryStats();
+		expect(stats.total).toBe(1);
+	});
+
+	it("buildMemoryPrompt with keywords prioritizes matching facts", () => {
+		writeSessionSummary(
+			"s1",
+			"/projects/test",
+			"Working on compression algorithm in src/ltsc.ts",
+		);
+		writeSessionSummary(
+			"s2",
+			"/projects/test",
+			"Fixed rendering bug in src/tui.tsx",
+		);
+		const prompt = buildMemoryPrompt("/projects/test", ["compression", "ltsc"]);
+		const compressionIdx = prompt.indexOf("compression");
+		const renderingIdx = prompt.indexOf("rendering");
+		expect(compressionIdx).toBeGreaterThan(0);
+		expect(compressionIdx).toBeLessThan(renderingIdx);
 	});
 });
