@@ -1,5 +1,5 @@
 import { join } from "path"
-import { readdirSync, statSync } from "fs"
+import { existsSync, readdirSync, statSync } from "fs"
 
 // ALWAYS dangerous: nested unbounded quantifiers on overlapping character classes.
 // These cause O(2^n) backtracking regardless of input.
@@ -24,18 +24,14 @@ const CHECKS: [RegExp, string][] = [
 ]
 
 function* walkTs(dir: string): Generator<string> {
-	try {
-		for (const entry of readdirSync(dir, { withFileTypes: true })) {
-			const full = join(dir, entry.name)
-			if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules") {
-				yield* walkTs(full)
-			} else if (entry.isFile() && entry.name.endsWith(".ts")) {
-				yield full
-			}
-		}
-	} catch {
-		// directory doesn't exist — skip
-	}
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules") {
+      yield* walkTs(full)
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      yield full
+    }
+  }
 }
 
 const walkDirs = [
@@ -49,6 +45,7 @@ const walkDirs = [
 let found = 0
 
 for (const srcDir of walkDirs) {
+	if (!existsSync(srcDir)) continue
 	for (const file of walkTs(srcDir)) {
 	  const content = require("fs").readFileSync(file, "utf-8")
 	  const lines = content.split("\n")
