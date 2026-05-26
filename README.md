@@ -2,8 +2,8 @@
 
 # ⚡ OpenToken
 
-Token-saving companion for OpenCode.  
-**5,078,587 tokens saved** in production (74% overall compression).
+**Token-saving companion for OpenCode.**  
+5,078,587 tokens saved in production (74% overall compression).
 
 <pre lang="bash">opencode plugin @mrgray17/opentoken@latest --global</pre>
 
@@ -12,7 +12,6 @@ Token-saving companion for OpenCode.
 [![CI](https://img.shields.io/github/actions/workflow/status/MrGray17/opentoken/ci.yml?label=CI)](https://github.com/MrGray17/opentoken/actions)
 [![Bun](https://img.shields.io/badge/bun-%3E%3D1.2.0-fbb744)](https://bun.sh)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![awesome-opencode](https://img.shields.io/badge/awesome--opencode-listed-blueviolet)](https://github.com/anomalyco/awesome-opencode)
 
 [Star on GitHub](https://github.com/MrGray17/opentoken) · [Report issues](https://github.com/MrGray17/opentoken/issues)
 
@@ -38,7 +37,7 @@ The model sees the same semantic content. It talks normally, responds the same w
 | **opencode** | `opencode plugin @mrgray17/opentoken@latest --global` | Everyone |
 | **npm** | `npm install -g @mrgray17/opentoken` + add to `opencode.json` | npm users |
 | **curl** | `curl -fsSL https://raw.githubusercontent.com/MrGray17/opentoken/main/install.sh \| bash` | No-npm setup |
-| **git** | `git clone ... ~/.config/opencode/plugins/opentoken && cd $_ && bun install` | Contributors |
+| **git** | `git clone https://github.com/MrGray17/opentoken.git ~/.config/opencode/plugins/opentoken && cd $_ && bun install` | Contributors |
 
 <details>
 <summary>Verify checksum</summary>
@@ -55,7 +54,7 @@ Zero config. Auto-loads on next OpenCode start.
 
 OpenToken intercepts tool output before it reaches the model and runs it through 35 stages of compression. Each stage is reversible or lossless — if output grows, the original is returned.
 
-> The 0-risk principle: every stage compares filtered vs original. OpenToken never makes things worse.
+> **The 0-risk principle:** every stage ends with a conservative filter that compares filtered vs original. OpenToken never makes things worse.
 
 ```
 tool output
@@ -76,7 +75,7 @@ tool output
   ├─ 32–33 Cross-call dedup + progressive disclosure
   ├─ 34    Symbol index cache
   └─ 35    Conservative safety filter
-           ▼ compressed output
+                ▼ compressed output
 ```
 
 Model responses go through 7 similar stages on the way out:
@@ -90,7 +89,7 @@ model response
   ├─ 5  Whitespace normalize
   ├─ 6  ANSI strip
   └─ 7  Conservative safety filter
-       ▼ compressed response
+              ▼ compressed response
 ```
 
 ## Real Numbers
@@ -110,16 +109,15 @@ Per-call stats available via the `opentoken_stats` MCP tool.
 
 | | OpenToken | DCP | Caveman | RTK |
 |---|---|---|---|---|
-| Input compression | 35 layers | Yes | No | No |
+| Zero-risk safety filter | Yes | No | N/A | No |
+| Secrets redaction | 30+ patterns | No | No | No |
 | Output compression | 7 layers | No | No | No |
 | Model speaks normally | Yes | Yes | No | Yes |
-| Zero-risk every stage | Yes | No | N/A | No |
+| Family-specific filters | 7 families | No | No | No |
+| Log/diff folding | Yes | No | No | No |
 | AST skeleton extraction | Yes | No | No | No |
 | LZ77 lossless (LTSC) | Yes | No | No | No |
 | LZW token substitution | Yes | No | No | No |
-| Family-specific filters | 7 families | No | No | No |
-| Log/diff folding | Yes | No | No | No |
-| Secrets redaction | 30+ patterns | No | No | No |
 | Cross-call dedup | Yes | No | No | No |
 | Install | `opencode plugin` | npm | prompt | patch |
 
@@ -136,25 +134,40 @@ The model speaks normally — no caveman, no degraded reasoning.
 ## Architecture
 
 <details>
-<summary><b>src/</b> — 20 modules, Bun runs TypeScript natively (no build step)</summary>
+<summary><b>src/</b> — 26 modules, Bun runs TypeScript natively (no build step)</summary>
 
 ```
 src/
-  ├── index.ts          Pipeline orchestration, hook registration
-  ├── precall.ts        Command rewriting, file blocking, size caps
-  ├── postcall.ts       Strip, normalize, fold, minify
-  ├── outputcomp.ts     7-layer output compression
-  ├── ltsc.ts           LZ77-style lossless sequence compression
-  ├── lzw.ts            LZW token substitution
-  ├── folding.ts        Log/diff folding (RLE, context wraps)
-  ├── dedup.ts          Cross-call deduplication
-  ├── autoescalate.ts   Progressive compression as context fills
-  ├── skeleton.ts       AST skeleton extraction
-  ├── toon.ts           JSON to tabular conversion
-  ├── router.ts         Content-aware compression routing
-  ├── families/         7 command-family filters
-  ├── filters/          3 tool-specific filters
-  └── utils/            Cache, errors, metrics, secrets, stats
+  ├── index.ts           Plugin bootstrap, hook registration, custom tools
+  ├── config.ts          Config loading + validation (type checks, unknown key warn)
+  ├── guards.ts          Input guards: size validation, tool name checks
+  ├── wrappers.ts        Shared wrappers: safeStage, conservativeFilter, routing
+  ├── pipelines/
+  │   ├── bash.ts        Bash output pipeline
+  │   ├── read.ts        Read output pipeline
+  │   ├── grep.ts        Grep output pipeline
+  │   ├── glob.ts        Glob output pipeline
+  │   └── shared.ts      Re-exports shared across pipelines
+  ├── precall.ts         Command rewriting, file blocking, size caps
+  ├── postcall.ts        Strip, normalize, fold, minify (14 stages)
+  ├── outputcomp.ts      7-layer output compression for model responses
+  ├── ltsc.ts            LZ77-style lossless sequence compression
+  ├── lzw.ts             LZW token substitution
+  ├── folding.ts         Log/diff folding (RLE, context wraps)
+  ├── dedup.ts           Cross-call deduplication
+  ├── autoescalate.ts    Progressive compression as context fills
+  ├── skeleton.ts        AST skeleton extraction
+  ├── toon.ts            JSON to tabular conversion
+  ├── router.ts          Content-aware compression routing
+  ├── families/          7 command-family filters (git, npm, cargo, docker, pip, make, fs)
+  ├── filters/           3 tool-specific filters (read, grep, glob)
+  ├── memory.ts          Cross-session fact memory
+  ├── symbolindex.ts     Structural symbol index
+  ├── progressive.ts     Progressive disclosure (summary first, full on demand)
+  ├── rewind.ts          Reversible compression with semantic abbreviation
+  ├── session.ts         Session state tracking
+  ├── utils/             Cache, errors, metrics, secrets, session-store, stats, tokens
+  └── tests/             10 test files, 261 tests (benchmark, unicode, smoke, …)
 ```
 
 </details>
@@ -162,18 +175,38 @@ src/
 <details>
 <summary><b>Configuration</b> — optional</summary>
 
-Create `~/.config/opencode/token/config.json`:
+Create `~/.config/opentoken/config.json`:
 
 ```json
 {
-  "enableHistoryCompression": false,
+  "enableSessionMemory": false,
+  "enableSymbolIndex": true,
+  "enableMetrics": true,
+  "enableTui": true,
+  "allowLockFileReads": false,
   "enableOutputSaving": true,
-  "maxOutputTokens": 4096,
-  "debug": false
+  "maxOutputBytes": 10485760,
+  "maxProcessingMs": 5000
 }
 ```
 
-Full schema: `.opencode/opentoken-config-schema.json`
+All keys are optional — defaults are sensible. Unknown keys and type mismatches are
+detected and warned at startup.
+
+</details>
+
+<details>
+<summary><b>Development</b></summary>
+
+```bash
+bun install           # install deps
+bun test              # 261 tests
+bun run typecheck     # tsc --noEmit
+bun run lint          # biome check
+bun run bench         # pipeline benchmarks
+```
+
+CI order: `typecheck` → `lint` → `checks:regex` → `test --coverage`.
 
 </details>
 
