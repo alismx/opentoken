@@ -29,16 +29,16 @@
 ## Install
 
 ```bash
-# CLI — works in any terminal, any shell, any AI tool
-npm install -g @mrgray17/opentoken-cli
-
-# or on-demand, no install
+# CLI — run anywhere, no install needed
 bun x @mrgray17/opentoken-cli wrap git diff HEAD~1
+
+# install globally (optional)
+bun install -g @mrgray17/opentoken-cli
 ```
 
 ```bash
 # MCP server — for Claude Code, Cursor, Windsurf, etc.
-bun install -g @mrgray17/opentoken-mcp
+bun x @mrgray17/opentoken-mcp
 ```
 
 ```bash
