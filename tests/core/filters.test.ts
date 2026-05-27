@@ -9,30 +9,30 @@ import {
 	filterCargoBuild,
 	filterCargoOutput,
 	filterCargoTest,
-} from "@mrgray17/opentoken-core/families/cargo";
-import { detectFamily } from "@mrgray17/opentoken-core/families/detect";
+} from "opentoken-core/families/cargo";
+import { detectFamily } from "opentoken-core/families/detect";
 import {
 	compressPaths,
 	filterFind,
 	filterFsOutput,
 	filterLs,
 	filterTree,
-} from "@mrgray17/opentoken-core/families/fs";
-import { filterGitDiff, filterGitStatus } from "@mrgray17/opentoken-core/families/git";
+} from "opentoken-core/families/fs";
+import { filterGitDiff, filterGitStatus } from "opentoken-core/families/git";
 import {
 	filterNpmInstall,
 	filterNpmOutput,
 	filterNpmTest,
-} from "@mrgray17/opentoken-core/families/npm";
+} from "opentoken-core/families/npm";
 import {
 	filterGoTest,
 	filterPytest,
 	filterTestOutput,
-} from "@mrgray17/opentoken-core/families/test";
-import { filterGlob } from "@mrgray17/opentoken-core/filters/glob";
-import { filterGrep } from "@mrgray17/opentoken-core/filters/grep";
-import { filterRead } from "@mrgray17/opentoken-core/filters/read";
-import { shouldBlockGrep, shouldBlockShellGrep } from "@mrgray17/opentoken-core/lspfirst";
+} from "opentoken-core/families/test";
+import { filterGlob } from "opentoken-core/filters/glob";
+import { filterGrep } from "opentoken-core/filters/grep";
+import { filterRead } from "opentoken-core/filters/read";
+import { shouldBlockGrep, shouldBlockShellGrep } from "opentoken-core/lspfirst";
 
 describe("L5: Family Detection", () => {
 	it("detects git", () => {

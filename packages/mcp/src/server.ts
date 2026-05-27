@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
+import { readline } from "bun";
 import {
 	formatStatsSummary,
 	rewriteCommand,
 	transformToolOutput,
-} from "@mrgray17/opentoken-core";
-import { readline } from "bun";
+} from "opentoken-core";
 
 const currentSessionID = crypto.randomUUID();
 

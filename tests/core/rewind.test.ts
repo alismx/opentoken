@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { abbreviateIdentifiers } from "@mrgray17/opentoken-core/rewind";
+import { abbreviateIdentifiers } from "opentoken-core/rewind";
 
 const TEST_SESSION = "rewind-test";
 

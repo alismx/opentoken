@@ -1,3 +1,5 @@
+import type { Plugin } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin";
 import {
 	applyBashFilter,
 	applyGlobFilter,
@@ -54,9 +56,7 @@ import {
 	validateToolName,
 	writeSessionStartFileAsync,
 	writeSessionState,
-} from "@mrgray17/opentoken-core";
-import type { Plugin } from "@opencode-ai/plugin";
-import { tool } from "@opencode-ai/plugin";
+} from "opentoken-core";
 
 // ─── OPENTOKEN TYPES (OpenCode-specific, not in core) ───
 
