@@ -7,6 +7,15 @@
 	"engines": {
 		"bun": ">=1.2.0"
 	},
+	"homepage": "https://github.com/MrGray17/opentoken",
+	"bugs": {
+		"url": "https://github.com/MrGray17/opentoken/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/MrGray17/opentoken.git",
+		"directory": "packages/opencode"
+	},
 	"files": [
 		"src/**/*.ts",
 		"src/**/*.tsx"

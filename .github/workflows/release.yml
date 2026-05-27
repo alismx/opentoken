@@ -30,7 +30,28 @@ jobs:
         with:
           bun-version: latest
       - run: bun install
-      - run: bunx npm publish --provenance --access public
+
+      - name: Publish @opentoken/core
+        run: bun publish --access public
+        working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish opentoken CLI
+        run: bun publish --access public
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @opentoken/mcp
+        run: bun publish --access public
+        working-directory: packages/mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @mrgray17/opentoken
+        run: bun publish --access public
+        working-directory: packages/opencode
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

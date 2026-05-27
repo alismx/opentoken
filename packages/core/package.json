@@ -4,6 +4,15 @@
 	"description": "Universal token-saving core — pure-logic compression pipeline, no platform dependencies",
 	"type": "module",
 	"license": "MIT",
+	"homepage": "https://github.com/MrGray17/opentoken",
+	"bugs": {
+		"url": "https://github.com/MrGray17/opentoken/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/MrGray17/opentoken.git",
+		"directory": "packages/core"
+	},
 	"engines": {
 		"bun": ">=1.2.0",
 		"node": ">=18"
