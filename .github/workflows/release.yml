@@ -31,26 +31,33 @@ jobs:
           bun-version: latest
       - run: bun install
 
+      # Helper: replace workspace:* deps with real versions, then npm publish
       - name: Publish @opentoken/core
-        run: bun publish --access public
+        run: npm publish --provenance --access public
         working-directory: packages/core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish opentoken CLI
-        run: bun publish --access public
+        run: |
+          sed -i 's|"workspace:\*"|"^2.0.0"|g' package.json
+          npm publish --provenance --access public
         working-directory: packages/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @opentoken/mcp
-        run: bun publish --access public
+        run: |
+          sed -i 's|"workspace:\*"|"^2.0.0"|g' package.json
+          npm publish --provenance --access public
         working-directory: packages/mcp
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @mrgray17/opentoken
-        run: bun publish --access public
+        run: |
+          sed -i 's|"workspace:\*"|"^2.0.0"|g' package.json
+          npm publish --provenance --access public
         working-directory: packages/opencode
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
