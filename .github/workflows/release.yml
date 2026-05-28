@@ -25,6 +25,8 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,37 +34,32 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          registry-url: "https://registry.npmjs.org"
       - run: bun install
 
       - name: Publish core
         run: npm publish --access public
         working-directory: packages/core
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish cli
         run: |
           sed -i 's|"workspace:*"|"^2.1.0"|g' package.json
           npm publish --access public
         working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish mcp
         run: |
           sed -i 's|"workspace:*"|"^2.1.0"|g' package.json
           npm publish --access public
         working-directory: packages/mcp
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish opencode
         run: |
           sed -i 's|"workspace:*"|"^2.1.0"|g' package.json
           npm publish --access public
         working-directory: packages/opencode
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - uses: softprops/action-gh-release@v2
         with:
