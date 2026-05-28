@@ -26,16 +26,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
       - uses: actions/setup-node@v4
         with:
           registry-url: "https://registry.npmjs.org"
           node-version: "22"
-      - run: bun install
 
-      # @mrgray17/opentoken-core has no workspace:* deps — publish directly
+      # Publish each package — no install needed, npm publish only reads package.json
       - name: Publish @mrgray17/opentoken-core
         run: npm publish --access public
         working-directory: packages/core
