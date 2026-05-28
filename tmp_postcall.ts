@@ -89,58 +89,7 @@ export function suppressOversized(
 	return { suppressed: false, result: text };
 }
 
-// #20: Key aliasing — replace long JSON keys with short aliases + legend prefix
-const KEY_MAP: Record<string, string> = {
-	description: "desc",
-	documentation: "docs",
-	configuration: "config",
-	dependencies: "deps",
-	devDependencies: "dd",
-	authentication: "auth",
-	authorization: "authz",
-	implementation: "impl",
-	information: "info",
-	environment: "env",
-	development: "dev",
-	production: "prod",
-	directory: "dir",
-	context: "ctx",
-	identifier: "id",
-	reference: "ref",
-	application: "app",
-	component: "comp",
-	namespace: "ns",
-	repository: "repo",
-	parameter: "param",
-	property: "prop",
-};
-
-export function aliasJsonKeys(text: string): string {
-	if (!text.includes("{") || !text.includes("}")) return text;
-
-	let replacements = 0;
-	const result = text.replace(
-		/(?<=[{,]\s*)"([a-zA-Z_]\w*)"\s*:/g,
-		(match, key) => {
-			const alias = KEY_MAP[key];
-			if (alias) {
-				replacements++;
-				return `"${alias}":`;
-			}
-			return match;
-		},
-	);
-	if (replacements === 0) return text;
-
-	// Prepend compact legend so model can decode aliased keys
-	const legend =
-		"<!--K:" +
-		Object.entries(KEY_MAP)
-			.map(([k, v]) => `${v}=${k}`)
-			.join(",") +
-		"-->\n";
-	return legend + result;
-}
+// #20: (removed — aliasJsonKeys was removed; JSON key aliasing corrupts schemas)
 
 // #22: URL shortening — strip query params + hash from long URLs
 export function shortenUrls(text: string): string {

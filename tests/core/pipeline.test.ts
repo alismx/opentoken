@@ -28,6 +28,7 @@ import {
 	minifyJSON,
 	minimizeTableWhitespace,
 	normalizeLogNoise,
+	aliasJsonKeys,
 	shortenUrls,
 	stripBase64Content,
 	stripThinkingBlocks,
@@ -111,6 +112,22 @@ describe("L10: Whitespace/Null Cleanup", () => {
 		const input = '{"name": "test", "created_at": "2026-05-19T00:00:00Z"}';
 		const result = cleanWhitespaceAndNulls(input);
 		expect(result).not.toContain("created_at");
+	});
+});
+
+describe("L11: Key Aliasing", () => {
+	it("aliases long JSON keys with legend", () => {
+		const input = '{"description": "test", "dependencies": {"react": "^18"}}';
+		const result = aliasJsonKeys(input);
+		expect(result).toContain("<!--K:");
+		expect(result).toContain('"desc"');
+		expect(result).toContain('"deps"');
+	});
+	it("skips input without JSON keys", () => {
+		expect(aliasJsonKeys("hello world")).toBe("hello world");
+	});
+	it("skips input without braces", () => {
+		expect(aliasJsonKeys("plain text")).toBe("plain text");
 	});
 });
 

@@ -131,7 +131,7 @@ export function compressLTSC(text: string): {
 	const replacements: Array<{ pos: number; len: number; token: string }> = [];
 
 	for (let i = 0; i < selected.length; i++) {
-		const token = `◆${i + 1}`;
+		const token = `$${i + 1}`;
 		dict.push(`${token}=${selected[i].str}`);
 
 		for (const pos of selected[i].positions) {

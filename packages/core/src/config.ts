@@ -27,7 +27,7 @@ export const DEFAULT_CONFIG: OpenTokenConfig = {
 	safeReadRoot: "", // Empty = use project directory
 	enableMetrics: true,
 	enableSymbolIndex: true,
-	conservativeUseTokens: false, // Byte count by default (fast)
+	conservativeUseTokens: true, // Token count (slower but safer)
 	enableHistoryCompression: true, // Kill switch — opt-in for experimental hooks
 	historyCompressionWindow: 4, // Keep last 4 messages full-fidelity
 	enableSessionMemory: false, // Cross-session memory persistence

@@ -1,0 +1,30 @@
+				} else {
+					filtered = safeStage(
+						"filterFsOutput",
+						() => filterFsOutput(command, output),
+						output,
+					);
+				}
+				break;
+			}
+			case "docker":
+				filtered = safeStage(
+					"filterDockerOutput",
+					() => filterDockerOutput(command, output),
+					output,
+				);
+				break;
+			case "pip":
+				filtered = safeStage(
+					"filterPipOutput",
+					() => filterPipOutput(command, output),
+					output,
+				);
+				break;
+			case "make":
+				filtered = safeStage(
+					"filterMakeOutput",
+					() => filterMakeOutput(command, output),
+					output,
+				);
+				break;

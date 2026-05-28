@@ -1,6 +1,5 @@
 // Re-exports of postcall and wrappers used by every pipeline function
 export {
-	aliasJsonKeys,
 	cleanWhitespaceAndNulls,
 	detectAndHandleBinary,
 	foldRepeatedLines,
