@@ -17,6 +17,9 @@
 		"url": "https://github.com/MrGray17/opentoken.git",
 		"directory": "packages/opencode"
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"files": [
 		"dist"
 	],

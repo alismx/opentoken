@@ -19,6 +19,9 @@
 		"url": "https://github.com/MrGray17/opentoken.git",
 		"directory": "packages/cli"
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"files": [
 		"src/**/*.ts"
 	],
