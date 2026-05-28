@@ -34,8 +34,8 @@ opencode plugin @mrgray17/opentoken@latest --global
 ```
 
 ```bash
-# MCP server — for Claude Code, Cursor, Windsurf, etc.
-bun x @mrgray17/opentoken-mcp
+# MCP server — for VS Code, Cursor, Windsurf, Claude, etc.
+npm install -g @mrgray17/opentoken-mcp
 ```
 
 ```bash
@@ -68,10 +68,20 @@ opentoken wrap cargo build --release
 opentoken stats
 ```
 
-### In your AI coding agent
+### In your AI coding agent (MCP)
+
+Install once:
+```bash
+npm install -g @mrgray17/opentoken-mcp
+```
+
+Then add to your IDE's MCP config:
+
+<details open>
+<summary><b>Cursor / Windsurf / Claude Desktop</b></summary>
 
 ```json
-// ~/.cursor/mcp.json or ~/.config/opencode/mcp.json
+// ~/.cursor/mcp.json  or  ~/.windsurf/mcp.json
 {
   "mcpServers": {
     "opentoken": {
@@ -80,6 +90,38 @@ opentoken stats
   }
 }
 ```
+</details>
+
+<details>
+<summary><b>VS Code (Copilot / GitHub Chat)</b></summary>
+
+```json
+// .vscode/mcp.json  or  ~/.vscode/mcp.json
+{
+  "servers": {
+    "opentoken": {
+      "type": "stdio",
+      "command": "opentoken-mcp"
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Claude Code (CLI)</b></summary>
+
+```json
+// ~/.claude/claude_desktop_config.json  or  .claude/mcp.json
+{
+  "mcpServers": {
+    "opentoken": {
+      "command": "opentoken-mcp"
+    }
+  }
+}
+```
+</details>
 
 That's it. All tool output is now compressed before reaching your LLM.
 

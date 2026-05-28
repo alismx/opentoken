@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
+import { createInterface } from "node:readline";
 import {
 	formatStatsSummary,
 	rewriteCommand,
 	transformToolOutput,
 } from "@mrgray17/opentoken-core";
-import { readline } from "bun";
 
 const currentSessionID = crypto.randomUUID();
 
@@ -153,7 +153,7 @@ async function handleMessage(msg: JsonRpcRequest): Promise<JsonRpcResponse> {
 }
 
 // Main loop — JSON-RPC over stdio
-for await (const line of readline(process.stdin)) {
+for await (const line of createInterface({ input: process.stdin })) {
 	if (!line.trim()) continue;
 	try {
 		const msg = JSON.parse(line) as JsonRpcRequest;

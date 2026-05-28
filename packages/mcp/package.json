@@ -5,7 +5,7 @@
 	"type": "module",
 	"license": "MIT",
 	"bin": {
-		"opentoken-mcp": "./src/server.ts"
+		"opentoken-mcp": "./bin/opentoken-mcp.mjs"
 	},
 	"engines": {
 		"bun": ">=1.2.0"
@@ -20,7 +20,8 @@
 		"directory": "packages/mcp"
 	},
 	"files": [
-		"src/**/*.ts"
+		"src/**/*.ts",
+		"bin/**/*.js"
 	],
 	"dependencies": {
 		"@mrgray17/opentoken-core": "workspace:*"
