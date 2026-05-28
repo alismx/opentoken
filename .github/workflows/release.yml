@@ -31,11 +31,10 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           node-version: "22"
 
-      # setup-node writes to $NPM_CONFIG_USERCONFIG — append our token there
       - name: Configure npm auth
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> $NPM_CONFIG_USERCONFIG
-          cat $NPM_CONFIG_USERCONFIG
+          printf '//registry.npmjs.org/:_authToken=%s\nregistry=https://registry.npmjs.org/\n' "$NODE_AUTH_TOKEN" > "$NPM_CONFIG_USERCONFIG"
+          cat "$NPM_CONFIG_USERCONFIG"
           npm whoami
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -46,19 +45,23 @@ jobs:
 
       - name: Publish @mrgray17/opentoken-cli
         run: |
-          sed -i 's|"workspace:*"|"^2.1.0"|g' package.json
+          VER=${GITHUB_REF_NAME#v}
+          sed -i "s|\"workspace:*\"|\"^$VER\"|g" package.json
           npm publish --access public
         working-directory: packages/cli
 
       - name: Publish @mrgray17/opentoken-mcp
         run: |
-          sed -i 's|"workspace:*"|"^2.1.0"|g' package.json
+          if [ -d bin ]; then bun run build; fi
+          VER=${GITHUB_REF_NAME#v}
+          sed -i "s|\"workspace:*\"|\"^$VER\"|g" package.json
           npm publish --access public
         working-directory: packages/mcp
 
       - name: Publish @mrgray17/opentoken
         run: |
-          sed -i 's|"workspace:*"|"^2.1.0"|g' package.json
+          VER=${GITHUB_REF_NAME#v}
+          sed -i "s|\"workspace:*\"|\"^$VER\"|g" package.json
           npm publish --access public
         working-directory: packages/opencode
 
