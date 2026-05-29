@@ -93,8 +93,10 @@ async function handleToolCall(
 			};
 		}
 		case "opentoken_stats": {
-			const summary = formatStatsSummary(undefined);
-			return { content: [{ type: "text", text: summary }] };
+			const session = formatStatsSummary(currentSessionID);
+			const allTime = formatStatsSummary();
+			const lines = [session, "", "── All Time ──", "", allTime];
+			return { content: [{ type: "text", text: lines.join("\n") }] };
 		}
 		default:
 			throw new Error(`Unknown tool: ${name}`);

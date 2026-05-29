@@ -395,15 +395,19 @@ export const OpenTokenPlugin: Plugin = async ({ directory }) => {
 		tool: {
 			opentoken_stats: tool({
 				description:
-					"Show OpenToken token savings statistics — total saved, by tool, top savings",
-				args: {
-					since: tool.schema.string().optional(),
-				},
-				async execute(args, _context) {
+					"Show OpenToken token savings statistics — session + all-time totals, by tool, top savings",
+				args: {},
+				async execute(_args, _context) {
 					try {
-						const sid = args.since === "all" ? undefined : sessionID;
-						const summary = formatStatsSummary(sid);
-						return { output: summary };
+						const session = formatStatsSummary(sessionID);
+						const allTime = formatStatsSummary();
+						const lines: string[] = [];
+						lines.push(session);
+						lines.push("");
+						lines.push("── All Time ──");
+						lines.push("");
+						lines.push(allTime);
+						return { output: lines.join("\n") };
 					} catch (err) {
 						const msg = err instanceof Error ? err.message : String(err);
 						return { output: `Failed to get stats: ${msg}` };
