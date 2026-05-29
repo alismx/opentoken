@@ -241,6 +241,83 @@ const COMMAND_REWRITES: { match: RegExp; rewrite: (cmd: string) => string }[] =
 				return `${cmd} -q`;
 			},
 		},
+		// rsync → add -q
+		{
+			match: /^rsync\s/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" -q") || cmd.includes(" --quiet")) return cmd;
+				return `${cmd} -q`;
+			},
+		},
+		// systemctl → add --quiet
+		{
+			match: /^systemctl\s/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" --quiet") || cmd.includes(" -q")) return cmd;
+				return `${cmd} --quiet`;
+			},
+		},
+		// journalctl → add --no-pager
+		{
+			match: /^journalctl\s/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" --no-pager")) return cmd;
+				return `${cmd} --no-pager`;
+			},
+		},
+		// make → add -s (suppress echo, keep errors)
+		{
+			match: /^make\s/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" -s") || cmd.includes(" --silent")) return cmd;
+				return `${cmd} -s`;
+			},
+		},
+		// npm/yarn/pnpm/bun test → add --silent
+		{
+			match: /^(npm|yarn|pnpm|bun)\s+test/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" --silent") || cmd.includes(" -s")) return cmd;
+				return `${cmd} --silent`;
+			},
+		},
+		// jest → add --silent
+		{
+			match: /^jest(?!\s+--silent)/,
+			rewrite: (cmd) => `${cmd} --silent`,
+		},
+		// vitest → add --reporter=basic (quieter than default)
+		{
+			match: /^vitest\s/,
+			rewrite: (cmd) => {
+				if (cmd.includes("--reporter")) return cmd;
+				return `${cmd} --reporter=basic`;
+			},
+		},
+		// git push → add --quiet
+		{
+			match: /^git\s+push/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" --quiet") || cmd.includes(" -q")) return cmd;
+				return `${cmd} --quiet`;
+			},
+		},
+		// git pull → add --quiet
+		{
+			match: /^git\s+pull/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" --quiet") || cmd.includes(" -q")) return cmd;
+				return `${cmd} --quiet`;
+			},
+		},
+		// git fetch → add --quiet
+		{
+			match: /^git\s+fetch/,
+			rewrite: (cmd) => {
+				if (cmd.includes(" --quiet") || cmd.includes(" -q")) return cmd;
+				return `${cmd} --quiet`;
+			},
+		},
 	];
 
 // #6: Check if file path is minified/generated

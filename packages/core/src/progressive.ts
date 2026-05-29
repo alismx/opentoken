@@ -11,8 +11,8 @@ import { logger } from "./utils/logger";
 import { SessionStore } from "./utils/session-store";
 
 const OFFLOAD_DIR = path.join(getConfigDir(), "offload");
-const MAX_INLINE_LINES = 10;
-const MAX_INLINE_BYTES = 1024; // 1KB
+const MAX_INLINE_LINES = 5;
+const MAX_INLINE_BYTES = 512; // 512B
 
 interface OffloadEntry {
 	id: string;

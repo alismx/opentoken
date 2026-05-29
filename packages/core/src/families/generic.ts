@@ -18,6 +18,56 @@ export function filterGeneric(output: string): string {
 		return compressStackTrace(lines);
 	}
 
+	// df — collapse to Filesystem: Used/Avail/Use%
+	if (lines.length > 1 && /^\s*Filesystem\s+/.test(lines[0])) {
+		const header = lines[0];
+		const availCol = header.indexOf("Avail");
+		const useCol = header.indexOf("Use%");
+		if (availCol >= 0) {
+			const result = ["Filesystem | Used | Avail | Use%"];
+			for (let i = 1; i < lines.length; i++) {
+				const l = lines[i];
+				if (!l.trim() || l.startsWith("tmpfs")) continue;
+				const parts = l.trim().split(/\s+/);
+				if (parts.length >= 5) {
+					result.push(`${parts[0]} | ${parts[2]} | ${parts[3]} | ${parts[4]}`);
+				}
+			}
+			return result.join("\n");
+		}
+	}
+
+	// free — collapse to total/used/free/available
+	if (lines.length >= 2 && /^\s*total\s+used\s+free/.test(lines[1])) {
+		const result = ["", "total | used | free | available"];
+		for (let i = 1; i < lines.length; i++) {
+			const l = lines[i].trim();
+			if (!l) continue;
+			const parts = l.split(/\s+/);
+			if (parts.length >= 4) {
+				result.push(
+					`${parts[0]} | ${parts[1]} | ${parts[2]} | ${parts[3] || "-"}`,
+				);
+			}
+		}
+		return result.join("\n");
+	}
+
+	// ps aux — strip PID/CPU/MEM/STAT columns
+	if (lines.length > 1 && /^\s*USER\s+PID\s+/.test(lines[0])) {
+		const result = [lines[0].replace(/\s*PID\s+.*?(?=\s*START)/, " ")];
+		for (let i = 1; i < lines.length; i++) {
+			const l = lines[i];
+			if (!l.trim()) continue;
+			const parts = l.trim().split(/\s+/);
+			if (parts.length >= 11) {
+				// USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+				result.push(`${parts[0]} | ${parts[10].substring(0, 60)}`);
+			}
+		}
+		return result.join("\n");
+	}
+
 	// Short outputs pass through
 	if (lines.length <= MAX_LINES && output.length <= MAX_BYTES) {
 		return output;
