@@ -1,5 +1,5 @@
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 import { logger } from "./utils/logger";
 
 // ─── CONFIGURATION ───
@@ -165,12 +165,7 @@ export function validateConfig(
 
 export async function loadConfig(directory: string): Promise<void> {
 	try {
-		const configPath = path.join(
-			os.homedir(),
-			".config",
-			"opentoken",
-			"config.json",
-		);
+		const configPath = path.join(getConfigDir(), "config.json");
 		const file = Bun.file(configPath);
 		if (await file.exists()) {
 			const raw = JSON.parse(await file.text()) as Partial<OpenTokenConfig>;

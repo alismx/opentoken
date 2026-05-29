@@ -4,10 +4,10 @@
 
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 
-const INDEX_DIR = path.join(os.homedir(), ".config", "opentoken", "index");
+const INDEX_DIR = path.join(getConfigDir(), "index");
 
 interface SymbolEntry {
 	id: string;

@@ -4,10 +4,10 @@
 // 0-risk: if data missing/corrupt, returns neutral (1.0) — no change to pipeline.
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 
-let METRICS_DIR = path.join(os.homedir(), ".config", "opentoken");
+let METRICS_DIR = getConfigDir();
 let METRICS_FILE = path.join(METRICS_DIR, "metrics.jsonl");
 const CACHE_TTL_MS = 60_000;
 

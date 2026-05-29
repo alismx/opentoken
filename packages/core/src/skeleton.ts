@@ -2,15 +2,10 @@
 // Inspired by pith + claw-compactor. 88% reduction per read.
 // Uses tree-sitter when available, falls back to regex extraction.
 
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 
-const _SKELETON_CACHE_DIR = path.join(
-	os.homedir(),
-	".config",
-	"opentoken",
-	"skeleton-cache",
-);
+const _SKELETON_CACHE_DIR = path.join(getConfigDir(), "skeleton-cache");
 const MAX_SKELETON_LINES = 100;
 
 // Language-specific regex patterns for skeleton extraction

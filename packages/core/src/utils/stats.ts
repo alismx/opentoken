@@ -2,10 +2,10 @@
 // Provides stats for the `opentoken stats` command and TUI display
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./configDir";
 
-const METRICS_DIR = path.join(os.homedir(), ".config", "opentoken");
+const METRICS_DIR = getConfigDir();
 const METRICS_FILE = path.join(METRICS_DIR, "metrics.jsonl");
 const SUMMARY_FILE = path.join(METRICS_DIR, "stats-summary.json");
 

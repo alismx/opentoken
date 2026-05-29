@@ -2,10 +2,10 @@
 // Separate from metrics — errors go to error.jsonl for analysis
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./configDir";
 
-const ERROR_DIR = path.join(os.homedir(), ".config", "opentoken");
+const ERROR_DIR = getConfigDir();
 const ERROR_FILE = path.join(ERROR_DIR, "error.jsonl");
 const MAX_ERROR_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_ROTATED_FILES = 3;

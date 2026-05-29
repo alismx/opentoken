@@ -2,8 +2,8 @@
 // Implements log rotation: 10MB max, keeps 5 rotated files
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./configDir";
 import { logger } from "./logger";
 
 interface MetricEntry {
@@ -25,7 +25,7 @@ interface MetricEntry {
 	};
 }
 
-const METRICS_DIR = path.join(os.homedir(), ".config", "opentoken");
+const METRICS_DIR = getConfigDir();
 const METRICS_FILE = path.join(METRICS_DIR, "metrics.jsonl");
 const MAX_METRICS_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_ROTATED_FILES = 5;

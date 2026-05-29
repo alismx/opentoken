@@ -5,12 +5,12 @@
 
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 import { logger } from "./utils/logger";
 import { SessionStore } from "./utils/session-store";
 
-const REWIND_DIR = path.join(os.homedir(), ".config", "opentoken", "rewind");
+const REWIND_DIR = path.join(getConfigDir(), "rewind");
 const MAX_COMPRESSED_SIZE = 15 * 1024; // 15KB — compress anything larger
 
 interface RewindEntry {

@@ -247,7 +247,7 @@ async function main(): Promise<void> {
 			process.stdout.write(USAGE);
 			break;
 		case "version":
-			process.stdout.write("opentoken v2.0.0\n");
+			process.stdout.write("opentoken v2.1.1\n");
 			break;
 		case "stats":
 			await statsMode(args._since as string);
@@ -262,6 +262,17 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+	const msg = err instanceof Error ? err.message : String(err);
+	process.stderr.write(`opentoken: ${msg}\n`);
+	process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
 	process.stderr.write(`opentoken: ${err.message}\n`);
+	process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+	const msg = reason instanceof Error ? reason.message : String(reason);
+	process.stderr.write(`opentoken: ${msg}\n`);
 	process.exit(1);
 });

@@ -1,13 +1,8 @@
-import os from "node:os";
 import path from "node:path";
 import { atomicWriteFileAsync, atomicWriteFileSync } from "./atomic-write";
+import { getConfigDir } from "./configDir";
 
-const SESSION_START_FILE = path.join(
-	os.homedir(),
-	".config",
-	"opentoken",
-	"session-start.json",
-);
+const SESSION_START_FILE = path.join(getConfigDir(), "session-start.json");
 
 export function writeSessionStartFile(sessionID: string): void {
 	try {

@@ -102,6 +102,7 @@ export type { TransformOptions, TransformResult } from "./transform";
 export { transformToolOutput } from "./transform";
 // Cache
 export { getCachedRead, setCachedRead } from "./utils/cache";
+export { getConfigDir, getDataDir } from "./utils/configDir";
 export { getErrorSummary, logError } from "./utils/errors";
 // Observability
 export { logger } from "./utils/logger";

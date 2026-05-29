@@ -4,12 +4,12 @@
 // Session-keyed to prevent cross-session data leakage
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 import { logger } from "./utils/logger";
 import { SessionStore } from "./utils/session-store";
 
-const OFFLOAD_DIR = path.join(os.homedir(), ".config", "opentoken", "offload");
+const OFFLOAD_DIR = path.join(getConfigDir(), "offload");
 const MAX_INLINE_LINES = 10;
 const MAX_INLINE_BYTES = 1024; // 1KB
 

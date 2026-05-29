@@ -8,6 +8,7 @@ import {
 } from "@mrgray17/opentoken-core";
 
 const currentSessionID = crypto.randomUUID();
+const LOGO = "\u{1F33A} opentoken-mcp";
 setProjectRoot(process.cwd());
 
 interface JsonRpcRequest {
@@ -161,6 +162,17 @@ async function handleMessage(
 	}
 }
 
+// Global error handlers — prevent silent crashes
+process.on("uncaughtException", (err) => {
+	process.stderr.write(`${LOGO}  FATAL: uncaught exception: ${err.message}\n`);
+	process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+	const msg = reason instanceof Error ? reason.message : String(reason);
+	process.stderr.write(`${LOGO}  FATAL: unhandled rejection: ${msg}\n`);
+	process.exit(1);
+});
+
 // Main loop — JSON-RPC over stdio
 const rl = createInterface({ input: process.stdin, terminal: false });
 for await (const line of rl) {
@@ -172,6 +184,12 @@ for await (const line of rl) {
 			process.stdout.write(JSON.stringify(response) + "\n");
 		}
 	} catch {
-		// Malformed JSON — ignore
+		process.stdout.write(
+			JSON.stringify({
+				jsonrpc: "2.0",
+				id: null,
+				error: { code: -32700, message: "Parse error" },
+			}) + "\n",
+		);
 	}
 }

@@ -3,12 +3,12 @@
 // Session-keyed to prevent cross-session state corruption
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 import { logger } from "./utils/logger";
 import { SessionStore } from "./utils/session-store";
 
-const MEMORY_DIR = path.join(os.homedir(), ".config", "opentoken");
+const MEMORY_DIR = getConfigDir();
 const SESSION_FILE = path.join(MEMORY_DIR, "session-memory.json");
 
 interface SessionSummary {

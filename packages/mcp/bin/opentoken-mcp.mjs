@@ -1,42 +1,67 @@
 #!/usr/bin/env node
-import { execSync, spawn } from "node:child_process";
-import { existsSync, realpathSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { spawn } from "node:child_process";
+import { existsSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const LOGO = "\u{1F33A} opentoken-mcp";
-const BUN_PATHS = [
-	"/home/linuxbrew/.linuxbrew/bin/bun",
-	process.env.BUN_EXECUTABLE,
-	"bun",
-].filter(Boolean);
+const isWin = process.platform === "win32";
 const ALT_RUNNERS = ["tsx", "ts-node"];
 
-function which(cmd) {
+function findInPath(cmd) {
 	try {
-		return realpathSync(
-			execSync(`which ${cmd}`, { stdio: ["ignore", "pipe", "ignore"] })
-				.toString()
-				.trim(),
-		);
-	} catch {
-		return null;
-	}
+		const sep = isWin ? ";" : ":";
+		const pathDirs = (process.env.PATH || "").split(sep);
+		for (const dir of pathDirs) {
+			const exts = isWin ? [".exe", ".cmd", ".bat", ""] : [""];
+			for (const ext of exts) {
+				const candidate = join(dir, cmd + ext);
+				try {
+					if (existsSync(candidate) && statSync(candidate).isFile())
+						return candidate;
+				} catch {}
+			}
+		}
+	} catch {}
+	return null;
 }
 
 function findBun() {
-	for (const c of BUN_PATHS) {
-		if (!c) continue;
+	if (isWin) {
+		const candidates = [
+			join(process.env.APPDATA || "", "npm", "bun.exe"),
+			join(process.env.LOCALAPPDATA || "", "bun", "bun.exe"),
+			join("C:\\Users", process.env.USERNAME || "", ".bun", "bin", "bun.exe"),
+		];
+		for (const p of candidates) {
+			try {
+				if (existsSync(p) && statSync(p).isFile()) return p;
+			} catch {}
+		}
+	} else {
+		const candidates = [
+			"/opt/homebrew/bin/bun",
+			"/usr/local/bin/bun",
+			join(process.env.HOME || "", ".bun", "bin", "bun"),
+		];
+		for (const p of candidates) {
+			try {
+				if (existsSync(p) && statSync(p).isFile()) return p;
+			} catch {}
+		}
+	}
+	if (process.env.BUN_EXECUTABLE) {
 		try {
-			if (existsSync(c) && statSync(c).isFile()) return realpathSync(c);
+			const p = process.env.BUN_EXECUTABLE;
+			if (existsSync(p)) return p;
 		} catch {}
 	}
-	return which("bun");
+	return findInPath("bun");
 }
 
 function findAltRunner() {
-	for (const r of ALT_RUNNERS) {
-		const found = which(r);
+	for (const runner of ALT_RUNNERS) {
+		const found = findInPath(runner);
 		if (found) return found;
 	}
 	return null;
@@ -82,7 +107,7 @@ if (bunBin) {
 		child.on("exit", (code) => process.exit(code ?? 1));
 	} else {
 		process.stderr.write(
-			`${LOGO}  ERROR: bun is required. Install: curl -fsSL https://bun.sh/install | bash\n`,
+			`${LOGO}  ERROR: bun is required. Install: https://bun.sh\n`,
 		);
 		setTimeout(() => process.exit(1), 3000);
 	}

@@ -3,11 +3,11 @@
 // 0-risk: silent skip on missing/corrupt file, cost-gated injection.
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getConfigDir } from "./utils/configDir";
 import { logger } from "./utils/logger";
 
-const MEMORY_DIR = path.join(os.homedir(), ".config", "opentoken");
+const MEMORY_DIR = getConfigDir();
 const MEMORY_PATH = path.join(MEMORY_DIR, "MEMORY.md");
 const MAX_FACTS = 50;
 const ESTIMATED_SAVINGS_PER_FACT = 80;
